@@ -1,0 +1,59 @@
+{
+  "name": "nostr-game-protocol",
+  "version": "0.1.0",
+  "description": "SDK de NGP (Nostr Games Protocol) y NGE (Nostr Game Escrow): wire canónico compartido tienda ⇄ juegos + cliente NGE y capa de firma NGP del lado juego.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/soyezequiel/Nostr-Game-Protocol.git"
+  },
+  "type": "module",
+  "files": [
+    "dist",
+    "src",
+    "vectors"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./nge": {
+      "types": "./dist/nge.d.ts",
+      "default": "./dist/nge.js"
+    },
+    "./nge-core": {
+      "types": "./dist/nge-core.d.ts",
+      "default": "./dist/nge-core.js"
+    },
+    "./nge-client": {
+      "types": "./dist/nge-client.d.ts",
+      "default": "./dist/nge-client.js"
+    },
+    "./ngp": {
+      "types": "./dist/ngp.d.ts",
+      "default": "./dist/ngp.js"
+    },
+    "./ngp-core": {
+      "types": "./dist/ngp-core.d.ts",
+      "default": "./dist/ngp-core.js"
+    },
+    "./vectors/nge-test-vectors.json": "./vectors/nge-test-vectors.json"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "prepare": "npm run build",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "gen:vectors": "node scripts/gen-vectors.cjs"
+  },
+  "peerDependencies": {
+    "nostr-tools": "^2.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "nostr-tools": "^2.23.8",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.15"
+  }
+}
