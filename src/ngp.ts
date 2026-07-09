@@ -32,6 +32,8 @@ import {
   buildPresenceTemplate,
   buildPresenceClearTemplate,
   buildScoreTemplate,
+  buildAttestationTemplate,
+  type NgpAttestationStatus,
 } from './ngp-core.js';
 
 // Re-exporta el núcleo entero: los consumidores siguen importando todo de acá.
@@ -333,4 +335,28 @@ export async function buildScoreEvent(
   p: { gameCoord: string; board: string; score: number; client?: string },
 ): Promise<Event> {
   return signer.signEvent(buildScoreTemplate(p));
+}
+
+// ── Atestación del oráculo NGP (kind:31338) — firma sobre el template del core ─
+
+/**
+ * Firma una atestación NGP (kind:31338). La firma el ORÁCULO (server-side, con su
+ * clave dedicada) para certificar un resultado que PRESENCIÓ — típicamente el
+ * room-server certificando "en la sala `ref` ganó `playerPubkey`". El formato
+ * (ancla `a`, `d` permanente por partida, `status`) vive en el core. No publica:
+ * sólo firma. ⚠️ Certificá solo lo que tu servidor realmente vio, y publicá la
+ * DELEGACIÓN en el listado 30023 para que el verificador confíe en esta clave.
+ */
+export async function buildAttestationEvent(
+  signer: NgpSigner,
+  p: {
+    gameCoord: string;
+    ref: string;
+    playerPubkey?: string;
+    status?: NgpAttestationStatus;
+    scoreEventId?: string;
+    score?: number;
+  },
+): Promise<Event> {
+  return signer.signEvent(buildAttestationTemplate(p));
 }

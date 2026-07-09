@@ -49,7 +49,8 @@ export const NGP_KIND = {
   dmInboxRelays: 10050, // NIP-17: lista de relays de DM del destinatario
   presence: 30315, // NIP-38: user status ("Jugando X")
   score: 31337, // NGP: puntaje addressable firmado por el jugador
-  scoreAttestation: 31338, // NGP: atestación de puntaje del oráculo (PROPUESTO en la spec)
+  scoreAttestation: 31338, // NGP: atestación del oráculo (spec §3.4). Certifica un
+  // resultado que el oráculo presenció (p. ej. el ganador de un versus).
   betContract: 1339, // NGP apuestas: contrato (regular, firma el retador)
   betResult: 1341, // NGP apuestas: resultado (regular, firma el oráculo)
   betState: 31340, // NGP apuestas: estado del escrow / terms (addressable, firma el escrow)
@@ -108,7 +109,7 @@ export function buildScoreTemplate(p: {
     kind: NGP_KIND.score,
     created_at: p.createdAt ?? now(),
     tags: [
-      ["a", p.gameCoord], // ancla al juego (30023:<tienda>:<slug>)
+      ["a", p.gameCoord], // ancla al juego (30023:<pubkey-del-dev>:<slug>)
       ["d", `${p.gameCoord}:${p.board}`], // 1 récord por jugador y tabla
       ["board", p.board],
       ["score", String(clamped)],
@@ -420,4 +421,131 @@ export function parseBetContractEvent(ev: NgpEventLike): NgpParsedBetContract | 
       ev.tags.find((t) => t[0] === "e")?.[1] ??
       null,
   };
+}
+
+// ── Marcador verificado: atestación del oráculo (kind:31338) ─────────────────
+//
+// Segundo nivel del marcador (spec §3.4). El marcador kind:31337 lo firma el
+// JUGADOR → es falsificable. La atestación kind:31338 la firma un ORÁCULO
+// (server-side) que PRESENCIÓ el resultado — p. ej. el room-server del juego
+// certificando "en la sala X ganó el jugador Y". Convive con el tier abierto: un
+// ranking "verificado" solo cuenta atestaciones firmadas por el oráculo
+// autorizado del juego.
+//
+// ⚠️ Vale lo que valga el oráculo: certificá solo lo que tu servidor realmente
+// vio (resultados de versus arbitrados server-side), nunca un score de cliente.
+//
+// DELEGACIÓN: como el oráculo casi nunca es la identidad raíz del dev del coord,
+// el listado del juego (kind:30023) DECLARA qué pubkey es el oráculo autorizado
+// (`oraclePubkeyFromListing`). El verificador confía en la atestación solo si su
+// firmante == esa pubkey declarada (`isAuthorizedAttestation`).
+
+export type NgpAttestationStatus = "verified" | "rejected";
+
+/**
+ * Template SIN firmar de una atestación (kind:31338, addressable). La firma el
+ * ORÁCULO. `d`=`<gameCoord>:<ref>` la hace un registro PERMANENTE por partida
+ * (`ref` único → nada la reemplaza; re-firmar el mismo `ref` la corrige).
+ * `status` por defecto "verified". `playerPubkey` es el jugador atestado (el
+ * ganador del versus); omitirlo/"" para una anulación ("rejected").
+ */
+export function buildAttestationTemplate(p: {
+  gameCoord: string;
+  /** Id único de lo atestado (sala/partida). Ancla el registro permanente. */
+  ref: string;
+  /** Jugador certificado (ganador). Opcional para status "rejected". */
+  playerPubkey?: string;
+  status?: NgpAttestationStatus;
+  /** Id del evento de score kind:31337 que se atestigua, si aplica. */
+  scoreEventId?: string;
+  /** Puntaje certificado (entero), opcional. */
+  score?: number;
+  createdAt?: number;
+}): NgpTimestampedTemplate {
+  if (!p.ref) throw new Error("La atestación necesita un `ref` (id de la partida).");
+  const status = p.status ?? "verified";
+  return {
+    kind: NGP_KIND.scoreAttestation,
+    created_at: p.createdAt ?? now(),
+    tags: [
+      ["a", p.gameCoord],
+      ["d", `${p.gameCoord}:${p.ref}`], // 1 registro permanente por partida
+      ["ref", p.ref],
+      ...(p.playerPubkey ? [["p", p.playerPubkey]] : []),
+      ...(p.scoreEventId ? [["e", p.scoreEventId]] : []),
+      ...(p.score !== undefined ? [["score", String(Math.floor(p.score))]] : []),
+      ["status", status],
+    ],
+    content: "",
+  };
+}
+
+export type NgpParsedAttestation = {
+  /** Quién FIRMÓ (pubkey del evento). El caller DEBE cruzarla con el oráculo
+   *  autorizado del juego (`isAuthorizedAttestation`) antes de confiar. */
+  oraclePubkey: string;
+  /** Coordenada del juego (tag `a`), o null. */
+  gameCoord: string | null;
+  /** Id de lo atestado (tag `ref`), o null. */
+  ref: string | null;
+  /** Jugador certificado (primer tag `p`), o null. */
+  playerPubkey: string | null;
+  /** "verified" | "rejected" (u otro string que ponga el oráculo). */
+  status: string;
+  /** Id del evento de score referido (tag `e`), o null. */
+  scoreEventId: string | null;
+  /** Puntaje certificado (tag `score`), o null si falta o no es finito. */
+  score: number | null;
+};
+
+/**
+ * Desarma una atestación kind:31338. Devuelve null solo si el kind no es el de
+ * atestación; el resto vuelve crudo. ⚠️ No verifica la firma (`verifyEvent`) ni
+ * la autorización del oráculo (`isAuthorizedAttestation`): eso es del caller.
+ */
+export function parseAttestationEvent(ev: NgpEventLike): NgpParsedAttestation | null {
+  if (ev.kind !== NGP_KIND.scoreAttestation) return null;
+  const scoreRaw = tagValue(ev, "score");
+  const scoreNum = Number(scoreRaw);
+  return {
+    oraclePubkey: ev.pubkey,
+    gameCoord: tagValue(ev, "a"),
+    ref: tagValue(ev, "ref"),
+    playerPubkey: ev.tags.find((t) => t[0] === "p" && typeof t[1] === "string")?.[1] ?? null,
+    status: tagValue(ev, "status") ?? "verified",
+    scoreEventId: ev.tags.find((t) => t[0] === "e" && typeof t[1] === "string")?.[1] ?? null,
+    score: scoreRaw !== null && Number.isFinite(scoreNum) ? scoreNum : null,
+  };
+}
+
+/**
+ * Extrae la pubkey del oráculo AUTORIZADO declarada en el listado del juego
+ * (kind:30023) — la DELEGACIÓN. El dev que publica el listado declara qué clave
+ * puede atestar en su nombre. Acepta `["oracle", <pk>]` o un `p` con token
+ * "oracle" (mismo patrón que los roles del contrato de apuesta). Devuelve null si
+ * el listado no declara oráculo (→ el juego no tiene tier verificado).
+ */
+export function oraclePubkeyFromListing(
+  listing: { tags: string[][] } | null | undefined,
+): string | null {
+  if (!listing || !Array.isArray(listing.tags)) return null;
+  const direct = listing.tags.find((t) => t[0] === "oracle" && typeof t[1] === "string")?.[1];
+  if (direct) return direct;
+  const pOracle = listing.tags.find(
+    (t) => t[0] === "p" && typeof t[1] === "string" && t.slice(2).includes("oracle"),
+  )?.[1];
+  return pOracle ?? null;
+}
+
+/**
+ * ¿La atestación la firmó el oráculo autorizado del juego? Cierra la delegación:
+ * `declaredOraclePubkey` sale de `oraclePubkeyFromListing(listado del juego)`.
+ * ⚠️ Verificá la firma criptográfica aparte (`verifyEvent(ev)`): esto solo compara
+ * identidades, el core no depende de nostr-tools.
+ */
+export function isAuthorizedAttestation(
+  att: NgpParsedAttestation,
+  declaredOraclePubkey: string | null,
+): boolean {
+  return declaredOraclePubkey !== null && att.oraclePubkey === declaredOraclePubkey;
 }

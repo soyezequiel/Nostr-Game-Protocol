@@ -15,6 +15,10 @@ import {
   buildNgpTermsTemplate,
   buildBetResultTemplate,
   parseBetContractEvent,
+  buildAttestationTemplate,
+  parseAttestationEvent,
+  oraclePubkeyFromListing,
+  isAuthorizedAttestation,
   type NgpEventLike,
 } from "../src/ngp-core.js";
 
@@ -255,5 +259,73 @@ describe("apuestas: contrato (kind:1339)", () => {
     const c = parseBetContractEvent(contractEvent({ tags: [["e", "solo-e"]] }));
     expect(c?.rootEventId).toBe("solo-e");
     expect(parseBetContractEvent(contractEvent({ kind: 1 }))).toBeNull();
+  });
+});
+
+describe("marcador verificado: atestación del oráculo (kind:31338)", () => {
+  const oracle = "d".repeat(64); // firmante (clave dedicada del oráculo)
+  const winner = "1".repeat(64);
+
+  it("template: ancla, d permanente por partida, p del ganador, status verified", () => {
+    const t = buildAttestationTemplate({ gameCoord: COORD, ref: "sala-9", playerPubkey: winner });
+    expect(t.kind).toBe(NGP_KIND.scoreAttestation);
+    expect(t.tags).toContainEqual(["a", COORD]);
+    expect(t.tags).toContainEqual(["d", `${COORD}:sala-9`]); // único → registro permanente
+    expect(t.tags).toContainEqual(["ref", "sala-9"]);
+    expect(t.tags).toContainEqual(["p", winner]);
+    expect(t.tags).toContainEqual(["status", "verified"]);
+  });
+
+  it("template: score/scoreEventId opcionales; rejected sin ganador; ref vacío lanza", () => {
+    const t = buildAttestationTemplate({
+      gameCoord: COORD,
+      ref: "m1",
+      playerPubkey: winner,
+      score: 128400.9,
+      scoreEventId: "score1",
+    });
+    expect(t.tags).toContainEqual(["score", "128400"]);
+    expect(t.tags).toContainEqual(["e", "score1"]);
+
+    const rej = buildAttestationTemplate({ gameCoord: COORD, ref: "m2", status: "rejected" });
+    expect(rej.tags.filter((x) => x[0] === "p")).toHaveLength(0);
+    expect(rej.tags).toContainEqual(["status", "rejected"]);
+
+    expect(() => buildAttestationTemplate({ gameCoord: COORD, ref: "" })).toThrow();
+  });
+
+  it("parse: ida y vuelta; oraclePubkey = firmante; otro kind → null", () => {
+    const ev: NgpEventLike = {
+      ...asEvent(buildAttestationTemplate({ gameCoord: COORD, ref: "sala-9", playerPubkey: winner, score: 40 })),
+      pubkey: oracle,
+    };
+    expect(parseAttestationEvent(ev)).toEqual({
+      oraclePubkey: oracle,
+      gameCoord: COORD,
+      ref: "sala-9",
+      playerPubkey: winner,
+      status: "verified",
+      scoreEventId: null,
+      score: 40,
+    });
+    expect(parseAttestationEvent({ ...ev, kind: 1 })).toBeNull();
+  });
+
+  it("delegación: lee el oráculo del listado 30023 (tag oracle o p con rol)", () => {
+    expect(oraclePubkeyFromListing({ tags: [["oracle", oracle]] })).toBe(oracle);
+    expect(oraclePubkeyFromListing({ tags: [["p", oracle, "wss://r", "oracle"]] })).toBe(oracle);
+    expect(oraclePubkeyFromListing({ tags: [["p", oracle]] })).toBeNull(); // p sin rol no cuenta
+    expect(oraclePubkeyFromListing({ tags: [["d", "tetris-beta"]] })).toBeNull();
+    expect(oraclePubkeyFromListing(null)).toBeNull();
+  });
+
+  it("autorización: true solo si el firmante == oráculo declarado", () => {
+    const att = parseAttestationEvent({
+      ...asEvent(buildAttestationTemplate({ gameCoord: COORD, ref: "sala-9", playerPubkey: winner })),
+      pubkey: oracle,
+    })!;
+    expect(isAuthorizedAttestation(att, oracle)).toBe(true);
+    expect(isAuthorizedAttestation(att, "e".repeat(64))).toBe(false); // otra clave: no vale
+    expect(isAuthorizedAttestation(att, null)).toBe(false); // el juego no declaró oráculo
   });
 });
