@@ -181,6 +181,20 @@ export type NgeBet = {
   result?: { winners: string[] } | null;
 };
 
+/** Estados de los que una apuesta YA NO se mueve: liquidada, cancelada, vencida o
+ *  reembolsada. Al alcanzarlos, `pollBet`/`watchBet` se sueltan solos (no tiene
+ *  sentido seguir consultando ni sostener la suscripción). */
+const TERMINAL_STATUSES: ReadonlySet<string> = new Set<NgeBetStatus>([
+  "settled",
+  "cancelled",
+  "expired",
+  "refunded",
+]);
+
+function isTerminalStatus(status: string): boolean {
+  return TERMINAL_STATUSES.has(status);
+}
+
 /**
  * Respuesta de `create_bet` (v1.1): el detalle COMPLETO de la apuesta (mismo
  * shape que `get_bet`) más los handles de depósito. Un solo RPC deja al juego
@@ -367,8 +381,9 @@ export class NGE {
 
   /**
    * Polling con azúcar: consulta `get_bet` cada `intervalMs` y notifica SOLO las
-   * transiciones de estado. Devuelve `stop`. Para clientes sin proceso persistente
-   * (serverless); con listener vivo conviene `watchBet` (push + respaldo).
+   * transiciones de estado. Se corta solo al llegar a estado terminal (settled/
+   * cancelled/expired/refunded). Devuelve `stop`. Para clientes sin proceso
+   * persistente (serverless); con listener vivo conviene `watchBet` (push + respaldo).
    */
   pollBet(
     betId: string,
@@ -377,25 +392,31 @@ export class NGE {
   ): () => void {
     let last = "";
     let stopped = false;
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const stop = () => {
+      stopped = true;
+      if (timer) clearInterval(timer);
+      timer = null;
+    };
     const tick = async () => {
       if (stopped) return;
       try {
         const bet = await this.getBet(betId);
         const key = `${bet.status}:${bet.seats.map((s) => (s.deposited ? 1 : 0)).join("")}`;
-        if (key !== last) {
+        if (!stopped && key !== last) {
           last = key;
           cb(bet);
         }
+        // Estado terminal: la apuesta no cambia más → soltar el interval solo,
+        // así el caller no tiene que acordarse de frenar un poll que ya no sirve.
+        if (!stopped && isTerminalStatus(bet.status)) stop();
       } catch {
         /* transitorio: el próximo tick reintenta */
       }
     };
     void tick();
-    const timer = setInterval(() => void tick(), intervalMs);
-    return () => {
-      stopped = true;
-      clearInterval(timer);
-    };
+    timer = setInterval(() => void tick(), intervalMs);
+    return stop;
   }
 
   /**
@@ -425,8 +446,10 @@ export class NGE {
    * Seguimiento con push + respaldo (spec §9, v1.1): se suscribe a `bet_updated`
    * y ante cada aviso de ESTA apuesta confirma con `get_bet` (la fuente de
    * verdad); un polling lento de respaldo (default 15 s) cubre pushes perdidos
-   * (relay caído, cliente offline al publicarse). Notifica solo transiciones.
-   * En serverless usá `pollBet`. Devuelve `stop`.
+   * (relay caído, cliente offline al publicarse). Notifica solo transiciones y se
+   * corta solo al llegar a estado terminal. Un aviso que llega con un `get_bet` en
+   * vuelo NO se pierde (se re-confirma al terminar). En serverless usá `pollBet`.
+   * Devuelve `stop`.
    */
   watchBet(
     betId: string,
@@ -436,8 +459,27 @@ export class NGE {
     let last = "";
     let stopped = false;
     let inFlight = false;
+    let pending = false;
+    let unsubscribe: () => void = () => {};
+    let timer: ReturnType<typeof setInterval> | null = null;
+
+    const stop = () => {
+      stopped = true;
+      if (timer) clearInterval(timer);
+      timer = null;
+      unsubscribe();
+    };
+
     const confirm = async () => {
-      if (stopped || inFlight) return;
+      if (stopped) return;
+      // Coalescing CON trailing edge: si ya hay un get_bet en vuelo no lo pisamos,
+      // pero anotamos que hace falta re-confirmar al terminar. Sin esto, un aviso
+      // que llega a mitad de un poll se perdía y la transición recién aparecía en
+      // el tick de respaldo (hasta `fallbackIntervalMs` de retraso).
+      if (inFlight) {
+        pending = true;
+        return;
+      }
       inFlight = true;
       try {
         const bet = await this.getBet(betId);
@@ -446,22 +488,30 @@ export class NGE {
           last = key;
           cb(bet);
         }
+        // Estado terminal: soltar timer + suscripción solos (evita fugarlos si el
+        // caller no llama stop tras la última transición).
+        if (!stopped && isTerminalStatus(bet.status)) {
+          stop();
+          return;
+        }
       } catch {
         /* transitorio: el próximo aviso o tick de respaldo reintenta */
       } finally {
         inFlight = false;
+        // Hubo al menos un pedido mientras confirmábamos → correr una vez más.
+        if (pending && !stopped) {
+          pending = false;
+          void confirm();
+        }
       }
     };
-    const unsubscribe = this.subscribeNotifications((n) => {
+
+    unsubscribe = this.subscribeNotifications((n) => {
       if (n.notification.betId === betId) void confirm();
     });
     void confirm();
-    const timer = setInterval(() => void confirm(), fallbackIntervalMs);
-    return () => {
-      stopped = true;
-      clearInterval(timer);
-      unsubscribe();
-    };
+    timer = setInterval(() => void confirm(), fallbackIntervalMs);
+    return stop;
   }
 
   /** Cierra el transporte (sockets). */

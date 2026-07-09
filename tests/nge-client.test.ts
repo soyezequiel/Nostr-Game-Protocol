@@ -12,6 +12,7 @@ import {
   decryptPayload,
   auditSettlement,
   type NgeBet,
+  type NgeBetStatus,
   type NgeTransport,
   type NgeResponsePayload,
 } from "../src/nge.js";
@@ -392,4 +393,146 @@ describe("errores del escrow → NgeError con el mismo code", () => {
       nge.close();
     });
   }
+});
+
+// ── watchBet / pollBet: coalescing con trailing edge + auto-stop terminal ────
+const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+async function waitFor(pred: () => boolean, timeoutMs = 3000, stepMs = 10): Promise<void> {
+  const start = Date.now();
+  while (!pred()) {
+    if (Date.now() - start > timeoutMs) throw new Error("waitFor: condición no cumplida a tiempo");
+    await delay(stepMs);
+  }
+}
+
+const betOf = (status: NgeBetStatus, aliceDeposited = false): NgeBet => ({
+  betId: "b1",
+  status,
+  stakeSats: 1000,
+  potSats: 2000,
+  deadlineSec: null,
+  seats: [
+    { seatId: "alice", deposited: aliceDeposited, payout: null },
+    { seatId: "bob", deposited: false, payout: null },
+  ],
+  result: status === "settled" ? { winners: ["alice"] } : null,
+});
+
+/**
+ * Escrow fake para seguimiento: responde `get_bet` con el estado actual (mutable
+ * vía `setBet`), cuenta las llamadas y puede emitir notifications 24942 firmadas.
+ * Con `deliverDelayMs` demora la entrega de la response para forzar el solape
+ * "aviso llega con un get_bet en vuelo".
+ */
+function watchHarness(opts: { deliverDelayMs?: number } = {}) {
+  let bet: NgeBet = betOf("pending_deposits");
+  let getBetCalls = 0;
+  const subs: { filter: Record<string, unknown>; onEvent: (e: Event) => void }[] = [];
+  const deliver = (ev: Event) => {
+    const run = () => {
+      for (const s of subs) if (filterMatches(ev, s.filter)) s.onEvent(ev);
+    };
+    if (opts.deliverDelayMs) setTimeout(run, opts.deliverDelayMs);
+    else queueMicrotask(run);
+  };
+  const transport: NgeTransport = {
+    async publish(ev) {
+      let req: { method: string; params?: Record<string, unknown> };
+      try {
+        req = decryptPayload(ev.content, escrowSk, ev.pubkey) as typeof req;
+      } catch {
+        return;
+      }
+      if (req.method === "get_bet") getBetCalls++;
+      const resp = finalizeEvent(
+        responseTemplate(
+          { result_type: req.method, result: bet as unknown as Record<string, unknown> },
+          { clientPubkey: ev.pubkey, requestId: ev.id, secretKey: escrowSk },
+        ),
+        escrowSk,
+      );
+      deliver(resp);
+    },
+    subscribe(filter, onEvent) {
+      const entry = { filter: filter as Record<string, unknown>, onEvent };
+      subs.push(entry);
+      return () => {
+        const i = subs.indexOf(entry);
+        if (i >= 0) subs.splice(i, 1);
+      };
+    },
+    close() {},
+  };
+  const emit = (betId: string, status: string, deposited: string[] = []) => {
+    const ev = finalizeEvent(
+      notificationTemplate(
+        { notification_type: "bet_updated", notification: { betId, status, deposited } },
+        { clientPubkey: clientPk, secretKey: escrowSk },
+      ),
+      escrowSk,
+    );
+    for (const s of subs) if (filterMatches(ev, s.filter)) s.onEvent(ev);
+  };
+  return {
+    transport,
+    emit,
+    setBet: (b: NgeBet) => {
+      bet = b;
+    },
+    get getBetCalls() {
+      return getBetCalls;
+    },
+    get subCount() {
+      return subs.length;
+    },
+  };
+}
+
+describe("pollBet — auto-stop en estado terminal", () => {
+  it("deja de pollear al ver un estado terminal (no dispara más get_bet)", async () => {
+    const h = watchHarness();
+    h.setBet(betOf("settled", true));
+    const nge = NGE.connect(V.uri, { transport: h.transport, resendMs: 500, timeoutMs: 2000 });
+    const seen: string[] = [];
+    nge.pollBet("b1", (b) => seen.push(b.status), 30);
+    await waitFor(() => seen.length >= 1);
+    const callsAtTerminal = h.getBetCalls;
+    await delay(150); // > 4 intervalos de 30 ms: si no se detuvo, habría más get_bet
+    expect(seen).toEqual(["settled"]);
+    expect(h.getBetCalls).toBe(callsAtTerminal);
+    nge.close();
+  });
+});
+
+describe("watchBet — trailing edge + auto-stop", () => {
+  it("no pierde la transición si el aviso llega con un get_bet en vuelo", async () => {
+    const h = watchHarness({ deliverDelayMs: 60 });
+    // fallback enorme: si aparece "funded" es por el trailing re-run, NO por el poll de respaldo.
+    const nge = NGE.connect(V.uri, { transport: h.transport, resendMs: 5000, timeoutMs: 5000 });
+    const seen: string[] = [];
+    nge.watchBet("b1", (b) => seen.push(b.status), 30_000);
+    await delay(15); // dentro de los 60 ms de entrega: el get_bet inicial sigue EN VUELO
+    h.setBet(betOf("funded", true));
+    h.emit("b1", "funded", ["alice"]); // aviso mid-flight → debe re-confirmar al terminar
+    await waitFor(() => seen.includes("funded"));
+    expect(seen[0]).toBe("pending_deposits");
+    expect(seen).toContain("funded");
+    nge.close();
+  });
+
+  it("suelta timer y suscripción al llegar a terminal", async () => {
+    const h = watchHarness();
+    const nge = NGE.connect(V.uri, { transport: h.transport, resendMs: 5000, timeoutMs: 5000 });
+    const seen: string[] = [];
+    nge.watchBet("b1", (b) => seen.push(b.status), 30);
+    await waitFor(() => seen.length >= 1); // primer confirm: pending_deposits
+    h.setBet(betOf("settled", true));
+    h.emit("b1", "settled", ["alice"]);
+    await waitFor(() => seen.includes("settled"));
+    const callsAtTerminal = h.getBetCalls;
+    await delay(150);
+    expect(h.getBetCalls).toBe(callsAtTerminal); // se cortó el interval de respaldo
+    expect(h.subCount).toBe(0); // se desuscribió de las notifications
+    nge.close();
+  });
 });
