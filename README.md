@@ -28,7 +28,7 @@ const signed = await window.nostr.signEvent(template);  // NIP-07, NIP-46 o clav
 // publicás `signed` a tus relays con nostr-tools — listo, ranking sin backend
 ```
 
-Apuestas 1v1 con escrow, desde tu game server. Toda la configuración es **un string**:
+Apuestas con escrow entre dos o más jugadores, desde tu game server. Toda la configuración es **un string**:
 
 ```ts
 // .env → NGE_CONNECTION="nostr+nge://<escrow>?relay=wss://…&secret=<nsec>"
@@ -36,14 +36,19 @@ import { NGE } from "nostr-game-protocol/nge";
 
 const nge = NGE.fromEnv();
 const bet = await nge.createBet({
-  seats: [{ seatId: "alice", pubkey: alicePk }, { seatId: "bob" }],
-  stakeSats: 1000,
-  condition: "Mejor de 3",
-  clientRef: "match-42",          // idempotencia: reintentar nunca duplica
+  seats: [                         // 2 o más asientos: el pozo lo arma la mesa entera
+    { seatId: "alice", pubkey: alicePk },
+    { seatId: "bob" },
+    { seatId: "carol" },
+  ],
+  stakeSats: 1000,                 // por asiento
+  condition: "Último en pie gana",
+  clientRef: "match-42",           // idempotencia: reintentar nunca duplica
 });
 for (const d of bet.deposits) showQr(d.seatId, d.bolt11);  // un invoice por asiento
 
 await nge.reportResult(bet.betId, ["alice"]);  // tu juego es el oráculo
+// (varios ganadores también vale: ["alice", "bob"] reparte el pozo entre ellos)
 ```
 
 Sin API key, sin webhooks que configurar, sin SDK de pagos. El jugador paga un invoice Lightning; el ganador cobra solo. Si conocés [NWC](https://nwc.dev), esto es la misma idea aplicada a escrow.
