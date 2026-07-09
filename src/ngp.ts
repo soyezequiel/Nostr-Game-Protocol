@@ -126,26 +126,18 @@ async function sealAndWrap(
 }
 
 /**
- * Arma los DOS gift-wrap NIP-17 de un reto: el del `recipient` (destinatario) y la
- * `selfCopy` (auto-copia para MI propio historial). Ambos envuelven el MISMO rumor
- * kind:14, anclado al juego con el tag `game`=<coordenada NIP-23>. Lanza si el
- * firmante no soporta NIP-44.
+ * Arma el rumor kind:14 (sin firmar; lleva id pero no sig, por NIP-59) de un reto,
+ * anclado al juego con el tag `game`=<coordenada NIP-23>. No firma nada (solo usa
+ * `myPubkey`), así el MISMO rumor sirve para el sobre del destinatario y la auto-copia.
  */
-export async function buildChallengeGiftWraps(
-  signer: NgpSigner,
+function buildChallengeRumor(
+  myPubkey: string,
   gameCoord: string,
   input: ChallengeInput,
-): Promise<{ recipient: Event; selfCopy: Event }> {
-  if (!signer.nip44Encrypt) {
-    throw new Error('Tu firmante no soporta NIP-44 (necesario para retos cifrados).');
-  }
-  const myPubkey = (await signer.getPublicKey()).trim().toLowerCase();
+) {
   const toPubkey = input.toPubkey.trim().toLowerCase();
   const nowSec = Math.floor(Date.now() / 1000);
   const expiresAt = nowSec + (input.ttlSec ?? DEFAULT_TTL_SEC);
-
-  // rumor kind:14 (sin firmar; lleva id pero no sig, por NIP-59). Uno solo para
-  // ambas copias, así el reto que ve el destinatario y el que veo yo son el mismo.
   const rumorBase = {
     kind: NGP_KIND.rumor,
     pubkey: myPubkey,
@@ -159,8 +151,47 @@ export async function buildChallengeGiftWraps(
     ],
     content: input.message,
   };
-  const rumor = { ...rumorBase, id: getEventHash(rumorBase) };
+  return { ...rumorBase, id: getEventHash(rumorBase) };
+}
 
+/**
+ * Arma SOLO el gift-wrap NIP-17 del destinatario (una única firma: NIP-44 + seal
+ * kind:13). Es el camino de MÍNIMA fricción para mandar un reto: con firmantes NIP-07
+ * (que piden aprobar cada operación) evita encadenar la 2ª firma de la auto-copia, que
+ * puede colgar el envío y dejar al destinatario sin recibir nada. Si además querés tu
+ * copia de historial, mandala aparte y best-effort. Lanza si el firmante no soporta NIP-44.
+ */
+export async function buildChallengeGiftWrap(
+  signer: NgpSigner,
+  gameCoord: string,
+  input: ChallengeInput,
+): Promise<Event> {
+  if (!signer.nip44Encrypt) {
+    throw new Error('Tu firmante no soporta NIP-44 (necesario para retos cifrados).');
+  }
+  const myPubkey = (await signer.getPublicKey()).trim().toLowerCase();
+  const toPubkey = input.toPubkey.trim().toLowerCase();
+  const rumor = buildChallengeRumor(myPubkey, gameCoord, input);
+  return sealAndWrap(signer, rumor, toPubkey, toPubkey);
+}
+
+/**
+ * Arma los DOS gift-wrap NIP-17 de un reto: el del `recipient` (destinatario) y la
+ * `selfCopy` (auto-copia para MI propio historial). Ambos envuelven el MISMO rumor
+ * kind:14. OJO: encadena DOS firmas; para el camino de mínima fricción (una sola firma)
+ * usá `buildChallengeGiftWrap`. Lanza si el firmante no soporta NIP-44.
+ */
+export async function buildChallengeGiftWraps(
+  signer: NgpSigner,
+  gameCoord: string,
+  input: ChallengeInput,
+): Promise<{ recipient: Event; selfCopy: Event }> {
+  if (!signer.nip44Encrypt) {
+    throw new Error('Tu firmante no soporta NIP-44 (necesario para retos cifrados).');
+  }
+  const myPubkey = (await signer.getPublicKey()).trim().toLowerCase();
+  const toPubkey = input.toPubkey.trim().toLowerCase();
+  const rumor = buildChallengeRumor(myPubkey, gameCoord, input);
   const recipient = await sealAndWrap(signer, rumor, toPubkey, toPubkey);
   const selfCopy = await sealAndWrap(signer, rumor, myPubkey, myPubkey);
   return { recipient, selfCopy };
