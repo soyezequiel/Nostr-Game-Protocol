@@ -122,11 +122,16 @@ Los **test vectors** (`vectors/nge-test-vectors.json`) son eventos NGE firmados 
 
 ## Specs
 
-La especificación completa y su razón de ser viven en el repo de Luna Negra:
+**La especificación canónica vive en este repo**, en [`docs/spec/`](docs/spec/):
 
-- `docs/nostr-games-protocol.md` — la visión general y el "por qué Nostr y no REST".
-- `docs/nostr-games-protocol-apuestas.md` — el escrow transparente.
-- `docs/nge/nge-v2-spec.md` — el RPC cifrado de NGE.
+- [`docs/spec/ngp.md`](docs/spec/ngp.md) — la capa pública: marcador, atestación, presencia, retos.
+- [`docs/spec/ngp-bets.md`](docs/spec/ngp-bets.md) — el escrow transparente por eventos.
+- [`docs/spec/nge.md`](docs/spec/nge.md) — el RPC cifrado de NGE.
+- [`docs/nip/games.md`](docs/nip/games.md) — el draft de NIP (inglés) para proponer a `nostr-protocol/nips`.
+
+Luna Negra y los juegos son **implementaciones** de esta spec; sus docs internos
+(`docs/nostr-games-protocol*.md` en el repo de Luna) son notas de implementación,
+no la fuente de verdad.
 
 ## Licencia
 
