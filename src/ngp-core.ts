@@ -48,7 +48,11 @@ export const NGP_KIND = {
   giftWrap: 1059, // NIP-59: seal cifrado con clave efímera
   dmInboxRelays: 10050, // NIP-17: lista de relays de DM del destinatario
   presence: 30315, // NIP-38: user status ("Jugando X")
-  score: 31337, // NGP: puntaje addressable firmado por el jugador
+  score: 31339, // NGP: puntaje addressable firmado por el jugador (renumerado 2026-07; antes 31337)
+  scoreLegacy: 31337, // kind VIEJO del puntaje — SOLO lectura durante la transición.
+  // Se renumeró porque 31337 es "Audio Track" de facto (Zapstr/Stemstr/Wavlake,
+  // registry-of-kinds). Los builders ya no lo emiten; los parsers lo siguen
+  // aceptando hasta que termine la doble lectura (ver docs/nip/roadmap.md).
   scoreAttestation: 31338, // NGP: atestación del oráculo (spec §3.4). Certifica un
   // resultado que el oráculo presenció (p. ej. el ganador de un versus).
   betContract: 1339, // NGP apuestas: contrato (regular, firma el retador)
@@ -73,7 +77,12 @@ function tagValue(ev: { tags: string[][] }, name: string): string | null {
   return typeof v === "string" ? v : null;
 }
 
-// ── Marcador (kind:31337) ────────────────────────────────────────────────────
+// ── Marcador (kind:31339) ────────────────────────────────────────────────────
+
+/** Kinds a pedir en los FILTROS de lectura del marcador mientras dure la
+ *  transición 31337 → 31339: el nuevo primero, el legacy después. Cuando se
+ *  cierre la doble lectura, este array queda en [NGP_KIND.score]. */
+export const NGP_SCORE_READ_KINDS: number[] = [NGP_KIND.score, NGP_KIND.scoreLegacy];
 
 /** Tope que acepta la tienda para el puntaje (entero 0…1e9). */
 export const NGP_MAX_SCORE = 1_000_000_000;
@@ -84,7 +93,7 @@ export const NGP_MAX_SCORE = 1_000_000_000;
 export const NGP_BOARD_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 
 /**
- * Template del evento de puntaje (kind:31337). `a`=gameCoord ancla al juego;
+ * Template del evento de puntaje (kind:31339). `a`=gameCoord ancla al juego;
  * `d`=`<coord>:<board>` hace que sea el único récord del jugador en esa tabla
  * (se auto-reemplaza al mejorar). ⚠️ Lo firma el CLIENTE del jugador: es
  * falsificable — sirve para rankings sociales, nunca para repartir dinero.
@@ -131,12 +140,13 @@ export type NgpParsedScore = {
 };
 
 /**
- * Desarma un evento de puntaje kind:31337. Devuelve null si el kind no es el de
+ * Desarma un evento de puntaje kind:31339 (acepta también el legacy 31337
+ * mientras dure la doble lectura). Devuelve null si el kind no es el de
  * puntaje, falta la coordenada (`a`) o el `score` no es un número finito.
  * ⚠️ No verifica la firma: hacé `verifyEvent(ev)` antes de confiar en él.
  */
 export function parseScoreEvent(ev: NgpEventLike): NgpParsedScore | null {
-  if (ev.kind !== NGP_KIND.score) return null;
+  if (ev.kind !== NGP_KIND.score && ev.kind !== NGP_KIND.scoreLegacy) return null;
   const gameCoord = tagValue(ev, "a");
   if (!gameCoord) return null;
   const score = Number(tagValue(ev, "score"));
@@ -425,7 +435,7 @@ export function parseBetContractEvent(ev: NgpEventLike): NgpParsedBetContract | 
 
 // ── Marcador verificado: atestación del oráculo (kind:31338) ─────────────────
 //
-// Segundo nivel del marcador (spec §3.4). El marcador kind:31337 lo firma el
+// Segundo nivel del marcador (spec §3.4). El marcador kind:31339 lo firma el
 // JUGADOR → es falsificable. La atestación kind:31338 la firma un ORÁCULO
 // (server-side) que PRESENCIÓ el resultado — p. ej. el room-server del juego
 // certificando "en la sala X ganó el jugador Y". Convive con el tier abierto: un
@@ -456,7 +466,7 @@ export function buildAttestationTemplate(p: {
   /** Jugador certificado (ganador). Opcional para status "rejected". */
   playerPubkey?: string;
   status?: NgpAttestationStatus;
-  /** Id del evento de score kind:31337 que se atestigua, si aplica. */
+  /** Id del evento de score kind:31339 que se atestigua, si aplica. */
   scoreEventId?: string;
   /** Puntaje certificado (entero), opcional. */
   score?: number;

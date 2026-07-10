@@ -70,7 +70,7 @@ No es todo-o-nada: podés adoptar solo el marcador, o solo la presencia, o solo 
 
 ## Los dos protocolos
 
-**NGP (Nostr Games Protocol)** es la capa pública: presencia NIP-38 ("Jugando X"), marcador `kind:31337`, retos 1v1 por NIP-17 (cifrados de punta a punta — ni la tienda puede leerlos), y la liquidación transparente de apuestas (contrato `1339`, resultado `1341`, estado del escrow `31340`). Todo son eventos Nostr estándar: cualquier cliente Nostr los lee, no solo Luna Negra.
+**NGP (Nostr Games Protocol)** es la capa pública: presencia NIP-38 ("Jugando X"), marcador `kind:31339`, retos 1v1 por NIP-17 (cifrados de punta a punta — ni la tienda puede leerlos), y la liquidación transparente de apuestas (contrato `1339`, resultado `1341`, estado del escrow `31340`). Todo son eventos Nostr estándar: cualquier cliente Nostr los lee, no solo Luna Negra.
 
 **NGE (Nostr Game Escrow)** es la capa privada: el canal por donde tu juego coordina una apuesta con el escrow. Es un RPC cifrado (NIP-44) sobre eventos efímeros, calcado del diseño de NWC: request/response, el relay es un caño tonto, la fuente de verdad vive en el escrow. La coordinación es privada; la liquidación pública (NGP) es opcional por apuesta.
 
@@ -92,7 +92,7 @@ Cuatro, y explican casi todo el código:
 
 Conviene saberlo antes de empezar, no después:
 
-- **El marcador `kind:31337` lo firma el cliente del jugador: es falsificable.** Sirve para rankings sociales; nunca lo uses para repartir dinero. Para eso está el escrow, donde el resultado lo reporta tu game server.
+- **El marcador `kind:31339` lo firma el cliente del jugador: es falsificable.** Sirve para rankings sociales; nunca lo uses para repartir dinero. Para eso está el escrow, donde el resultado lo reporta tu game server.
 - **El escrow NGE es custodial — pero el custodio podés ser vos.** El escrow custodia el pozo mientras la apuesta corre. El diseño acota el daño (un `secret` filtrado puede elegir ganador entre los asientos declarados, no redirigir fondos; toda acción del escrow puede quedar anclada como evento firmado y verificable), pero custodial es custodial — el protocolo no lo esconde. Lo que **no** está atado es *quién* custodia: la URI solo nombra una `escrow-pubkey` + relays, así que el rol de escrow no es de Luna Negra por definición. Podés correr tu propio escrow, o que tu propio game server sea el custodio. Ojo con esto último: si el juego es su propio escrow, custodia los fondos **y** decide el ganador (es el oráculo) — la separación de terceros se colapsa, y eso es self-custody, no escrow de tercero. La contra: el SDK trae el **cliente** (`NGE`) llave-en-mano, pero no un servidor de escrow: para ser custodio implementás vos el lado servidor con las primitivas de `nge-core` (los templates de response/notification, el cifrado simétrico ya están; la referencia es `nge-service.ts` de Luna). Los [test vectors](#desarrollo) son tu criterio de conformidad.
 - **Es un protocolo joven.** El wire está congelado y en producción, pero el ecosistema hoy es una tienda y los juegos que integra. Si eso te parece poco, es razonable; si te parece temprano-y-por-eso-interesante, también.
 

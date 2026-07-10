@@ -5,7 +5,7 @@
 // importa `nostr-game-protocol/ngp-core`). Acá queda lo que
 // solo el juego necesita: la interfaz de firma `NgpSigner` (estructuralmente
 // compatible con `LunaSigner`), los wrappers que firman los templates del core
-// (presencia NIP-38, marcador 31337) y el reto 1v1 por NIP-17 (gift-wrap),
+// (presencia NIP-38, marcador 31339) y el reto 1v1 por NIP-17 (gift-wrap),
 // que es juego↔juego y no lo habla la tienda.
 //
 // Este paquete es protocolo y NADA más: cero imports del juego, cero
@@ -321,10 +321,10 @@ export async function buildPresenceClearEvent(signer: NgpSigner): Promise<Event>
   return signer.signEvent(buildPresenceClearTemplate());
 }
 
-// ── Marcador NGP (kind:31337) — firma sobre el template del core ─────────────
+// ── Marcador NGP (kind:31339) — firma sobre el template del core ─────────────
 
 /**
- * Firma el evento de puntaje NGP (kind:31337). El formato (ancla `a`, `d` por
+ * Firma el evento de puntaje NGP (kind:31339). El formato (ancla `a`, `d` por
  * tabla, clamp del puntaje, gramática del board) vive en el core. ⚠️ Lo firma el
  * CLIENTE del jugador: es falsificable — sirve para rankings sociales, nunca
  * para repartir dinero. No publica: sólo firma. Lanza si el board o el puntaje

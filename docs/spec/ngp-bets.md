@@ -212,7 +212,7 @@ registro previo: el contrato es la fuente (confianza al primer uso).
 
 ### Relación con el marcador
 
-El `kind:31337` (score del jugador) sigue siendo social y falsificable — nunca
+El `kind:31339` (score del jugador) sigue siendo social y falsificable — nunca
 dispara pagos. El 1341 es la pieza con dinero; la atestación 31338 es su prima
 sin dinero (el oráculo puede publicar ambos).
 
@@ -247,7 +247,7 @@ cualquiera puede probarlo con eventos firmados.
 | Amenaza | Mitigación |
 |---|---|
 | Alterar términos post-firma | imposible: el `id` del 1339 es el hash |
-| Resultado falso | solo vale la firma del oráculo declarado; el 31337 nunca paga |
+| Resultado falso | solo vale la firma del oráculo declarado; el 31339 nunca paga |
 | Clave del oráculo comprometida | rotación: re-publicar el 30023 con la nueva |
 | Replay de un 1341 en otro contrato | el tag `e` lo ata a un contrato único |
 | Reuso de un 9734 viejo | el invoice compromete el 9734 vía description hash (NIP-57) |

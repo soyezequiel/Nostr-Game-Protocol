@@ -5,14 +5,15 @@
 > **Meta:** This is the working draft to be proposed as a PR to
 > [nostr-protocol/nips](https://github.com/nostr-protocol/nips). The kind
 > numbers below are what two interoperating implementations (a game store /
-> escrow and a game) run in production today — **except kind:31337, which has
-> a confirmed de-facto collision with "Audio Track" (Zapstr/Stemstr/Wavlake,
-> see [nips PR #1043](https://github.com/nostr-protocol/nips/pull/1043) and
-> `registry-of-kinds`) and will be renumbered before submission** (candidate:
-> 31339). Treat all numbers as provisional until registered in
-> [registry-of-kinds](https://github.com/nostr-protocol/registry-of-kinds).
-> Plan and prior-art research: [roadmap.md](roadmap.md). Canonical spec
-> (Spanish, more detailed): [`../spec/`](../spec/README.md).
+> escrow and a game) run in production today. The score kind was originally
+> 31337 and was renumbered to 31339 in 2026-07 after confirming a de-facto
+> collision with "Audio Track" (Zapstr/Stemstr/Wavlake — see
+> [nips PR #1043](https://github.com/nostr-protocol/nips/pull/1043) and
+> `registry-of-kinds`); implementations still read 31337 during a transition
+> period but no longer write it. Numbers should be registered in
+> [registry-of-kinds](https://github.com/nostr-protocol/registry-of-kinds)
+> before submission. Plan and prior-art research: [roadmap.md](roadmap.md).
+> Canonical spec (Spanish, more detailed): [`../spec/`](../spec/README.md).
 
 This NIP defines how games publish their social layer on Nostr: game identity,
 player scores, oracle attestations, and transparent Lightning wagers. It reuses
@@ -43,14 +44,14 @@ Throughout this NIP, `GAME` is that coordinate. All events below anchor to it
 with an `a` tag. The article MAY declare the game's authorized oracle with an
 `["oracle", "<pubkey>"]` tag (see *Attestations* and *Wagers*).
 
-## Score event (kind:31337)
+## Score event (kind:31339)
 
 An addressable event **signed by the player** holding their best score on one
 of the game's boards.
 
 ```jsonc
 {
-  "kind": 31337,
+  "kind": 31339,
   "pubkey": "<player-pubkey>",
   "tags": [
     ["a", "<GAME>"],
@@ -72,10 +73,10 @@ of the game's boards.
   `unit` tag (`points`, `ms`, `goals`, …) tells ranking clients which direction
   is better (`ms` = lower is better).
 - Reading a leaderboard requires no server:
-  `{"kinds":[31337],"#a":["<GAME>"],"#board":["classic"]}` — group by pubkey,
+  `{"kinds":[31339],"#a":["<GAME>"],"#board":["classic"]}` — group by pubkey,
   sort by score, resolve names via kind:0.
 
-**Scores are self-reported and forgeable.** Clients MUST treat kind:31337 as
+**Scores are self-reported and forgeable.** Clients MUST treat kind:31339 as
 social data and MUST NOT use it to settle money. That is what attestations and
 wager results are for.
 
@@ -94,7 +95,7 @@ match.
     ["d", "<GAME>:<ref>"],
     ["ref", "<unique-match-id>"],
     ["p", "<attested-player-pubkey>"],
-    ["e", "<attested kind:31337 id>"],
+    ["e", "<attested kind:31339 id>"],
     ["score", "128400"],
     ["status", "verified"]
   ],
@@ -236,7 +237,7 @@ proves it.
 
 | kind | description | signer | type |
 |---|---|---|---|
-| 31337 | player score (per board) | player | addressable |
+| 31339 | player score (per board) | player | addressable |
 | 31338 | oracle attestation | oracle | addressable |
 | 1339 | wager contract | challenger | regular |
 | 1341 | wager result | oracle | regular |

@@ -41,7 +41,14 @@ function asEvent(t: { kind: number; created_at?: number; tags: string[][]; conte
   };
 }
 
-describe("marcador (kind:31337)", () => {
+describe("marcador (kind:31339)", () => {
+  it("renumeración: se escribe 31339, el legacy 31337 queda solo-lectura", () => {
+    // 31337 colisiona con "Audio Track" de facto (registry-of-kinds); el wire
+    // migró a 31339 con doble lectura. Ver docs/nip/roadmap.md.
+    expect(NGP_KIND.score).toBe(31339);
+    expect(NGP_KIND.scoreLegacy).toBe(31337);
+  });
+
   it("template: ancla, d-tag por tabla, score clampeado", () => {
     const t = buildScoreTemplate({ gameCoord: COORD, board: "clasico", score: 1234.9, client: "tetra" });
     expect(t.kind).toBe(NGP_KIND.score);
@@ -62,6 +69,15 @@ describe("marcador (kind:31337)", () => {
   it("parse: ida y vuelta con el template", () => {
     const ev = asEvent(buildScoreTemplate({ gameCoord: COORD, board: "sprint", score: 42 }));
     expect(parseScoreEvent(ev)).toEqual({ gameCoord: COORD, board: "sprint", score: 42 });
+  });
+
+  it("parse: doble lectura — acepta también el kind legacy 31337", () => {
+    const ev = asEvent(buildScoreTemplate({ gameCoord: COORD, board: "sprint", score: 42 }));
+    expect(parseScoreEvent({ ...ev, kind: NGP_KIND.scoreLegacy })).toEqual({
+      gameCoord: COORD,
+      board: "sprint",
+      score: 42,
+    });
   });
 
   it("parse: null si el kind, la coordenada o el score no cierran", () => {

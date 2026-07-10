@@ -39,18 +39,19 @@ Verificado contra el README oficial, `nostr-protocol/registry-of-kinds`
 
 | Kind nuestro | Veredicto | Detalle |
 |---|---|---|
-| **31337 (score)** | **COLISIÓN CONFIRMADA** | Es **"Audio Track"** de facto (Zapstr, Stemstr, Wavlake, desde ~2023), registrado en `registry-of-kinds` y documentado en el [PR #1043](https://github.com/nostr-protocol/nips/pull/1043). **Hay que renumerarlo antes del NIP.** |
+| **31337 (score)** | **COLISIÓN CONFIRMADA → renumerado a 31339 (2026-07)** | Era **"Audio Track"** de facto (Zapstr, Stemstr, Wavlake, desde ~2023), registrado en `registry-of-kinds` y documentado en el [PR #1043](https://github.com/nostr-protocol/nips/pull/1043). **Resuelto:** el score es `kind:31339`; escritura solo en 31339 y doble lectura 31339+31337 en SDK, Luna y Tetris hasta cerrar la transición. |
 | 31338 (atestación) | libre | Ausente de las tres fuentes. |
 | 31340 (estado escrow) | libre | Ausente de las tres fuentes. |
 | 1339 (contrato) | libre | Ojo con vecinos: 1337 = Code Snippet (NIP-C0), 1311 = Live Chat (NIP-53). |
 | 1341 (resultado) | libre | Ausente de las tres fuentes. |
 | 24940–24942 (NGE) | sin verificar en relays | No aparecen en los registros; falta chequear uso de facto con un `REQ` a relays grandes. |
 
-**Decisión pendiente (renumerar 31337):** el rango 31339–31399 (salvo 31388)
-aparece libre. Propuesta: migrar el score a **31339** (addressable), con
-período de doble publicación/lectura en Luna, Tetris y el SDK. Es un cambio de
-wire v2: deliberado, versionado y anunciado. Hasta decidirlo, el NIP draft
-declara los números como provisionales.
+**Decisión tomada (2026-07-09): score renumerado a 31339** (el rango
+31339–31399, salvo 31388, aparece libre). Ejecutado: los builders del SDK
+emiten solo 31339; `parseScoreEvent` y los lectores de Luna/Tetris aceptan
+31339+31337 (`NGP_SCORE_READ_KINDS`). Cerrar la doble lectura cuando los
+récords vigentes hayan re-publicado en 31339 (los addressable se re-emiten
+solos con cada mejora de récord).
 
 **Advertencia que justifica apurarse:** el `kind:30` que usaba Jester (ajedrez)
 fue **pisado** después por otro estándar (hoy es "internal reference",
@@ -59,10 +60,10 @@ NKBIP-03). Un kind sin registrar no es de nadie.
 ## 4. Plan de acción (en orden)
 
 ### Fase A — Asegurar el terreno (barato, ya)
-1. **Decidir la renumeración del 31337** (ver §3) y ejecutar la migración
-   (SDK + Luna + Tetris, doble lectura durante la transición).
+1. ✅ **Renumeración del 31337 → 31339** decidida y ejecutada (2026-07-09):
+   SDK + Luna + Tetris con doble lectura durante la transición.
 2. **PR a [`registry-of-kinds`](https://github.com/nostr-protocol/registry-of-kinds)**
-   registrando nuestros kinds (score renumerado, 31338, 31340, 1339, 1341 y
+   registrando nuestros kinds (31339, 31338, 31340, 1339, 1341 y
    los NGE 24940–24942). El registro acepta "any reasonable event definition"
    sin exigir implementaciones — es la reserva de bajo costo que nos protege
    del escenario Jester.

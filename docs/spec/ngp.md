@@ -1,6 +1,6 @@
 # NGP — Nostr Games Protocol (capa pública)
 
-> **Estado: estable.** Los kinds propios de este documento (31337, 31338) están
+> **Estado: estable.** Los kinds propios de este documento (31339, 31338) están
 > congelados y en producción. Las palabras clave **DEBE / NO DEBE / PUEDE**
 > siguen el sentido de RFC 2119.
 >
@@ -54,14 +54,19 @@ El artículo del juego PUEDE declarar además la **delegación de oráculo**
 
 ---
 
-## 2. Marcador — `kind:31337`
+## 2. Marcador — `kind:31339`
+
+> **Renumeración (2026-07).** El score usaba `kind:31337`, que colisiona con
+> "Audio Track" de facto (Zapstr/Stemstr/Wavlake). Los escritores DEBEN emitir
+> **solo 31339**; los lectores DEBERÍAN aceptar también 31337 durante la
+> transición (`NGP_SCORE_READ_KINDS` en el core la implementa).
 
 Un puntaje es un evento **addressable**, firmado **por el jugador**, anclado a
 la coordenada del juego.
 
 ```jsonc
 {
-  "kind": 31337,
+  "kind": 31339,
   "pubkey": "b2f7…d4a1",                                  // firma el JUGADOR
   "created_at": 1751760000,
   "tags": [
@@ -92,7 +97,7 @@ la coordenada del juego.
 ### Leer el ranking (cualquier cliente)
 
 ```jsonc
-{ "kinds": [31337], "#a": ["30023:79be…f817:tetra"], "#board": ["clasico"] }
+{ "kinds": [31339], "#a": ["30023:79be…f817:tetra"], "#board": ["clasico"] }
 ```
 
 El cliente agrupa por `pubkey`, ordena por `score` y resuelve nombre/avatar con
@@ -101,7 +106,7 @@ el `kind:0` de cada jugador. No hace falta ninguna plataforma.
 ### ⚠️ Anti-trampa — la regla más importante de esta spec
 
 El score lo firma el **cliente del jugador**: es **falsificable**. Sirve para
-rankings sociales. Un verificador **NO DEBE** usar un `kind:31337` para
+rankings sociales. Un verificador **NO DEBE** usar un `kind:31339` para
 disparar pagos ni repartir premios. Para eso existen la atestación (§3) y el
 escrow ([ngp-bets](ngp-bets.md)).
 
@@ -124,7 +129,7 @@ autorizado del juego.
     ["d", "30023:79be…f817:tetra:room-8f21"],             // <GAME>:<ref> — permanente
     ["ref", "room-8f21"],                                 // id único de lo atestado (sala/partida)
     ["p", "b2f7…d4a1"],                                   // jugador certificado (ganador)
-    ["e", "<id del 31337 atestado>"],                     // opcional: qué score atestigua
+    ["e", "<id del 31339 atestado>"],                     // opcional: qué score atestigua
     ["score", "128400"],                                  // opcional: puntaje certificado
     ["status", "verified"]                                 // verified | rejected
   ],
