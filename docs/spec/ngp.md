@@ -198,7 +198,7 @@ ninguna plataforma pueden leerlo. El contenido en claro es un **rumor
     ["p", "<pubkey del retado>"],
     ["game", "30023:79be…f817:tetra"],                    // coordenada del juego
     ["room", "sala-8f21"],                                // sala online donde se juega
-    ["url", "https://mi-juego.example/?join=sala-8f21"],  // link de entrada
+    ["url", "https://mi-juego.example/?join=sala-8f21"],  // link de entrada (?join, estándar único)
     ["expiration", "1751763600"]                          // vencimiento del reto (default 1 h)
   ],
   "content": "¡Te reto a una partida!"
@@ -217,6 +217,10 @@ Ambos sobres llevan `created_at` aleatorizado hasta 2 días hacia atrás (NIP-59
   `game` no coincida con su propia coordenada.
 - El receptor DEBERÍA validar que el `url` sea de su propio origin antes de
   navegar (no seguir links a orígenes ajenos).
+- El `url` usa el **formato estándar de entrada a sala**: `<gameUrl>/?join=<roomId>`
+  (helpers `buildRoomLink` / `parseRoomLink` en `ngp-core`). Es el MISMO link que arma
+  el "Invitar a jugar" (Room Link) de la tienda — un solo camino de entrada. El juego
+  crea la sala *lazy* (unir-o-crear con ese id) al abrir el link.
 - Los retos se publican en los **relays de DM del destinatario** (`kind:10050`,
   NIP-17); si no publicó lista, en los relays acordados por la aplicación.
 - El emisor PUEDE mandarse una auto-copia (mismo rumor, sellado hacia sí mismo)

@@ -69,7 +69,9 @@ export interface ChallengeInput {
   toPubkey: string;
   /** id de la sala online donde se juega. */
   roomId: string;
-  /** link `?join=<sala>` con el que el amigo entra a la sala. */
+  /** link con el que el amigo entra a la sala. Armalo con `buildRoomLink(gameUrl,
+   *  roomId)` (formato estándar `?join=<sala>`, el mismo que usa el Room Link de la
+   *  tienda). */
   joinUrl: string;
   /** texto del reto (aparece en el DM / toast). */
   message: string;

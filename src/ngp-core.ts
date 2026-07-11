@@ -559,3 +559,39 @@ export function isAuthorizedAttestation(
 ): boolean {
   return declaredOraclePubkey !== null && att.oraclePubkey === declaredOraclePubkey;
 }
+
+// ─── Link de entrada a sala (`?join`) ──────────────────────────────────────
+//
+// Convención ÚNICA y estándar para invitar a jugar en una sala hosteada por el
+// juego: `<gameUrl>/?join=<roomId>`. La usan por igual el reto NIP-17 (el `url`
+// del rumor, ver ngp.ts) y el "Invitar a jugar" de la tienda (Room Link). Antes
+// la tienda usaba un parámetro propio (`?lnRoom`); se unificó a `?join` para que
+// el juego tenga UN solo camino de entrada. El juego crea la sala lazy al abrir el
+// link (unir-o-crear con ese id externo); es público (cualquiera con el link entra)
+// y sin token de identidad — la identidad la resuelve el juego por Nostr.
+
+/** Formato válido del id de sala en el link de entrada. */
+export const ROOM_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+
+/** Arma el link canónico de entrada a una sala del juego: `<gameUrl>/?join=<roomId>`.
+ *  Lanza si el `roomId` no cumple {@link ROOM_ID_RE}. */
+export function buildRoomLink(gameUrl: string, roomId: string): string {
+  if (!ROOM_ID_RE.test(roomId))
+    throw new Error(`roomId inválido (esperado ${ROOM_ID_RE.source}): ${roomId}`);
+  return `${gameUrl.replace(/\/+$/, "")}/?join=${encodeURIComponent(roomId)}`;
+}
+
+/** Extrae y valida el `roomId` de un link `?join=<id>` (URL completa o query string
+ *  suelto, p. ej. `location.search`). Devuelve null si no hay un `join` válido. */
+export function parseRoomLink(input: string): string | null {
+  if (!input) return null;
+  let search: URLSearchParams;
+  try {
+    search = new URL(input).searchParams;
+  } catch {
+    const q = input.includes("?") ? input.slice(input.indexOf("?") + 1) : input;
+    search = new URLSearchParams(q);
+  }
+  const id = search.get("join");
+  return id && ROOM_ID_RE.test(id) ? id : null;
+}

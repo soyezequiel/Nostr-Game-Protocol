@@ -1,6 +1,6 @@
 {
   "name": "nostr-game-protocol",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "SDK de NGP (Nostr Games Protocol) y NGE (Nostr Game Escrow): wire canónico compartido tienda ⇄ juegos + cliente NGE y capa de firma NGP del lado juego.",
   "license": "MIT",
   "repository": {
