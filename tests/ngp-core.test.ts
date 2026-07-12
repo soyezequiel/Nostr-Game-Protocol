@@ -105,10 +105,15 @@ describe("presencia NIP-38 (kind:30315)", () => {
     expect(t.content).toBe("Jugando TETRA");
   });
 
-  it("clear: contenido vacío + expiración inmediata", () => {
+  it("clear: contenido vacío + expiración HOLGADA (no nace vencido)", () => {
     const t = buildPresenceClearTemplate({ createdAt: 1000 });
     expect(t.content).toBe("");
-    expect(t.tags).toContainEqual(["expiration", "1001"]);
+    // ⚠️ NO createdAt+1: un evento que nace ya vencido es rechazado/purgado por
+    // algunos relays (NIP-40) y la presencia activa "resucita" en ellos. El clear
+    // lo define el content vacío; la expiración solo lo mantiene vivo para pisar.
+    expect(t.tags).toContainEqual(["expiration", "1120"]);
+    // Aun "vigente" por NIP-40, un lector lo trata como clear (content vacío).
+    expect(parsePresenceEvent(asEvent(t), 1005)?.active).toBe(false);
   });
 
   it("clear con gameCoord: ancla `a` al juego que limpia (visible vía #a) y sigue inactiva", () => {

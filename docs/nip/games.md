@@ -117,10 +117,14 @@ tier (oracle-signed, suitable for prizes).
 
 - **"Playing X" presence** is a standard NIP-38 status (kind:30315) with
   `["a", "<GAME>"]` and a short NIP-40 `expiration` (~30–60 s). Clearing it is
-  an empty-content status with immediate expiration; the clear SHOULD keep the
-  `["a", "<GAME>"]` tag so observers filtering by `#a` see it instantly (the
-  kind is replaceable — an unanchored clear silently overwrites the active
-  status and those observers only notice at NIP-40 expiry).
+  an empty-content status; the clear SHOULD keep the `["a", "<GAME>"]` tag so
+  observers filtering by `#a` see it instantly (the kind is replaceable — an
+  unanchored clear silently overwrites the active status and those observers
+  only notice at NIP-40 expiry), and it MUST NOT be born expired
+  (`created_at + 1`): some relays reject or purge already-expired events, and
+  on those the active status remains the latest slot event, so the player
+  "resurrects" as playing. Use a comfortable expiration (~120 s) — what makes
+  it a clear is the empty content, not the expiration.
 - **1v1 challenges** are standard NIP-17 private DMs whose kind:14 rumor
   carries `["game", "<GAME>"]`, `["room", "<room-id>"]`, `["url", "<join-url>"]`
   and `["expiration", "<ts>"]`. Receivers MUST discard expired challenges and

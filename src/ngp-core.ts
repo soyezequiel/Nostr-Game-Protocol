@@ -185,8 +185,21 @@ export function buildPresenceTemplate(p: {
 }
 
 /**
- * Template que LIMPIA la presencia (NIP-38: content vacío + expiración
- * inmediata), para que "Jugando X" desaparezca ya al cerrar el juego.
+ * Cuánto vive el CLEAR en los relays (NIP-40). ⚠️ No puede ser "inmediato"
+ * (`createdAt + 1`): un evento que nace ya vencido es RECHAZADO por algunos
+ * relays ("event is expired") o purgado antes de propagarse — y en esos relays
+ * la presencia ACTIVA queda como último evento del slot, así que el jugador
+ * "resucita" como jugando cuando un cliente los consulta (p. ej. al refrescar
+ * la tienda), hasta que la presencia vieja vence por su propio TTL. Lo que hace
+ * al evento un CLEAR es el `content` vacío, no la expiración: los lectores lo
+ * tratan como "dejó de jugar" apenas lo ven. La expiración holgada solo lo
+ * mantiene vivo lo suficiente para pisar de forma fiable en TODOS los relays.
+ */
+export const NGP_PRESENCE_CLEAR_TTL_SEC = 120;
+
+/**
+ * Template que LIMPIA la presencia (NIP-38: content vacío), para que
+ * "Jugando X" desaparezca ya al cerrar el juego.
  *
  * Pasá `gameCoord` (la coordenada del juego que se está limpiando) siempre que
  * la tengas: sin el tag `a`, un observador que filtre presencia por `#a` (el
@@ -202,7 +215,7 @@ export function buildPresenceClearTemplate(
   const createdAt = p.createdAt ?? now();
   const tags = [["d", NGP_PRESENCE_D_TAG]];
   if (p.gameCoord) tags.push(["a", p.gameCoord]);
-  tags.push(["expiration", String(createdAt + 1)]);
+  tags.push(["expiration", String(createdAt + NGP_PRESENCE_CLEAR_TTL_SEC)]);
   return {
     kind: NGP_KIND.presence,
     created_at: createdAt,
