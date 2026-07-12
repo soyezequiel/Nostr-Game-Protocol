@@ -38,6 +38,9 @@ import {
 
 // Re-exporta el núcleo entero: los consumidores siguen importando todo de acá.
 export * from './ngp-core.js';
+// Orquestación de presencia NIP-38 (heartbeat + throttles + clears). El wire
+// sigue en el core; esto es el ciclo de vida que todo juego repite.
+export * from './ngp-presence.js';
 
 /**
  * Firmante mínimo que requiere el protocolo. `LunaSigner` (NIP-07 extensión /
