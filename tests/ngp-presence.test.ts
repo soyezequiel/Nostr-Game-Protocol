@@ -4,7 +4,9 @@ import type { Event, EventTemplate } from "nostr-tools";
 import {
   createPresenceManager,
   NGP_KIND,
+  NGP_PRESENCE_CLEAR_TTL_SEC,
   NGP_PRESENCE_DEFAULT_MIN_RESIGN_MS,
+  NGP_PRESENCE_DEFAULT_PUBLISH_TIMEOUT_MS,
   type NgpPresenceStorage,
   type NgpSigner,
 } from "../src/ngp.js";
@@ -221,6 +223,103 @@ describe("createPresenceManager", () => {
     fail = false;
     await vi.advanceTimersByTimeAsync(NGP_PRESENCE_DEFAULT_MIN_RESIGN_MS);
     expect(published).toHaveLength(1);
+  });
+
+  it("publish COLGADO: el timeout libera el heartbeat y el siguiente latido elegible re-firma", async () => {
+    const { signer } = localSigner();
+    let hang = true;
+    const published: Event[] = [];
+    const errors: string[] = [];
+    const manager = createPresenceManager({
+      signer,
+      gameCoord: COORD,
+      publish: (evt) =>
+        hang
+          ? new Promise(() => {}) // relay que nunca manda OK: no settlea jamás
+          : (published.push(evt), Promise.resolve()),
+      onError: (stage) => void errors.push(stage),
+    });
+
+    manager.start("En TETRA");
+    await flush();
+    expect(published).toHaveLength(0);
+
+    // El timeout corta la espera (antes: inFlight quedaba clavado para siempre).
+    await vi.advanceTimersByTimeAsync(NGP_PRESENCE_DEFAULT_PUBLISH_TIMEOUT_MS);
+    expect(errors).toContain("publish");
+
+    // Pasado el cooldown (que arrancó al disparar el timeout, t=10s), el
+    // heartbeat vuelve a firmar y publicar en su siguiente latido (t=60s).
+    hang = false;
+    await vi.advanceTimersByTimeAsync(
+      NGP_PRESENCE_DEFAULT_MIN_RESIGN_MS + NGP_PRESENCE_DEFAULT_PUBLISH_TIMEOUT_MS * 2,
+    );
+    expect(published).toHaveLength(1);
+  });
+
+  it("publish colgado: el clear igual queda pre-firmado y clearNow() lo despacha", async () => {
+    const { signer } = localSigner();
+    const publishedSync: Event[] = [];
+    const manager = createPresenceManager({
+      signer,
+      gameCoord: COORD,
+      ttlSec: TTL,
+      publish: () => new Promise(() => {}), // colgado: ambiguo, pudo llegar
+      publishSync: (evt) => void publishedSync.push(evt),
+    });
+
+    manager.start("En TETRA");
+    await vi.advanceTimersByTimeAsync(NGP_PRESENCE_DEFAULT_PUBLISH_TIMEOUT_MS);
+
+    manager.clearNow();
+    expect(publishedSync).toHaveLength(1);
+    expect(publishedSync[0].content).toBe("");
+    expect(publishedSync[0].tags).toContainEqual(["a", COORD]);
+  });
+
+  it("clear pre-firmado: su expiración cubre TODA la vida de la presencia (TTL + margen)", async () => {
+    const { manager, published, publishedSync } = harness();
+    manager.start("Jugando TETRA");
+    await flush();
+
+    manager.clearNow();
+    const clear = publishedSync[0];
+    expect(clear.tags).toContainEqual([
+      "expiration",
+      String(published[0].created_at + TTL + NGP_PRESENCE_CLEAR_TTL_SEC),
+    ]);
+  });
+
+  it("rechazo INMEDIATO del publish: no se firma clear (no hay presencia que apagar)", async () => {
+    const { signer } = localSigner();
+    const publishedSync: Event[] = [];
+    const manager = createPresenceManager({
+      signer,
+      gameCoord: COORD,
+      publish: async () => {
+        throw new Error("ningún relay aceptó");
+      },
+      publishSync: (evt) => void publishedSync.push(evt),
+    });
+
+    manager.start("En TETRA");
+    await flush();
+
+    manager.clearNow();
+    expect(publishedSync).toHaveLength(0);
+  });
+
+  it("stop() sin await del caller: el clear pre-firmado sale sincrónicamente antes de los awaits", async () => {
+    const { manager, publishedSync } = harness();
+    manager.start("Jugando TETRA");
+    await flush();
+
+    // Simula el logout que recarga la página sin esperar la promesa de stop():
+    // lo único garantizado es lo que salió ANTES del primer await.
+    void manager.stop();
+    expect(publishedSync).toHaveLength(1);
+    expect(publishedSync[0].content).toBe("");
+    expect(publishedSync[0].tags).toContainEqual(["a", COORD]);
   });
 
   it("publish que falla: no adopta el estado (el próximo latido elegible reintenta)", async () => {

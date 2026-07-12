@@ -210,12 +210,19 @@ export const NGP_PRESENCE_CLEAR_TTL_SEC = 120;
  * compatibilidad con firmantes que no conocen la coord al momento del clear.
  */
 export function buildPresenceClearTemplate(
-  p: { createdAt?: number; gameCoord?: string } = {},
+  p: { createdAt?: number; gameCoord?: string; expiration?: number } = {},
 ): NgpTimestampedTemplate {
   const createdAt = p.createdAt ?? now();
   const tags = [["d", NGP_PRESENCE_D_TAG]];
   if (p.gameCoord) tags.push(["a", p.gameCoord]);
-  tags.push(["expiration", String(createdAt + NGP_PRESENCE_CLEAR_TTL_SEC)]);
+  // `expiration` (epoch absoluto) permite que un clear PRE-FIRMADO cubra toda la
+  // vida de la presencia que apaga: si el despacho se demora (heartbeat colgado,
+  // pestaña cerrada tarde), un clear que expiró antes que la presencia es
+  // descartado por NIP-40 y el jugador queda "jugando" hasta su TTL. El
+  // `Math.max` conserva el piso histórico: el clear NUNCA nace vencido (ver ⚠️
+  // arriba en NGP_PRESENCE_CLEAR_TTL_SEC).
+  const expiration = Math.max(p.expiration ?? 0, createdAt + NGP_PRESENCE_CLEAR_TTL_SEC);
+  tags.push(["expiration", String(expiration)]);
   return {
     kind: NGP_KIND.presence,
     created_at: createdAt,

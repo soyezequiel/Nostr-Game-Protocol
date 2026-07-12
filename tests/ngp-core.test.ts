@@ -116,6 +116,16 @@ describe("presencia NIP-38 (kind:30315)", () => {
     expect(parsePresenceEvent(asEvent(t), 1005)?.active).toBe(false);
   });
 
+  it("clear con `expiration` override: la respeta si supera el piso, nunca por debajo", () => {
+    // Override por encima del piso (clear pre-firmado que cubre la vida de la
+    // presencia que apaga): se respeta tal cual.
+    const long = buildPresenceClearTemplate({ createdAt: 1000, expiration: 1300 });
+    expect(long.tags).toContainEqual(["expiration", "1300"]);
+    // Override por DEBAJO del piso: gana el piso — el clear nunca nace vencido.
+    const short = buildPresenceClearTemplate({ createdAt: 1000, expiration: 1001 });
+    expect(short.tags).toContainEqual(["expiration", "1120"]);
+  });
+
   it("clear con gameCoord: ancla `a` al juego que limpia (visible vía #a) y sigue inactiva", () => {
     const t = buildPresenceClearTemplate({ createdAt: 1000, gameCoord: COORD });
     expect(t.tags).toContainEqual(["a", COORD]);

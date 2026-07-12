@@ -28,7 +28,11 @@
 // cosa con forma de localStorage. Acá no hay relays, ni env, ni DOM.
 import type { Event } from 'nostr-tools';
 import type { NgpSigner } from './ngp.js';
-import { buildPresenceTemplate, buildPresenceClearTemplate } from './ngp-core.js';
+import {
+  buildPresenceTemplate,
+  buildPresenceClearTemplate,
+  NGP_PRESENCE_CLEAR_TTL_SEC,
+} from './ngp-core.js';
 
 /** TTL default de la presencia (NIP-40). Es la RED DE SEGURIDAD si el clear del
  *  cierre no llegó a salir (crash): fantasma acotado a ~3 min. NO puede ser
@@ -40,6 +44,13 @@ export const NGP_PRESENCE_DEFAULT_HEARTBEAT_MS = 20_000;
 /** Mínimo entre firmas (ms): no molestar al firmante más seguido, salvo cambio
  *  de mensaje. También es el cooldown tras un fallo de firma/publicación. */
 export const NGP_PRESENCE_DEFAULT_MIN_RESIGN_MS = 40_000;
+/** Tope de espera del publish (ms). ⚠️ Sin esto, un `Promise.any(pool.publish())`
+ *  puede no settlear NUNCA (relay que no manda OK, socket zombi, suspensión del
+ *  SO) y dejar `inFlight` clavado: el heartbeat sigue disparando pero nunca
+ *  vuelve a firmar → la presencia envejece sin renovarse hasta vencer. Menor que
+ *  el heartbeat para no solapar latidos; de fondo los timers estrangulados
+ *  pueden estirarlo, pero sigue siendo un tope finito. */
+export const NGP_PRESENCE_DEFAULT_PUBLISH_TIMEOUT_MS = 10_000;
 
 /** Subset estructural de `localStorage` (el paquete no depende del DOM). */
 export interface NgpPresenceStorage {
@@ -68,6 +79,17 @@ export interface NgpPresenceManagerOptions {
   ttlSec?: number;
   heartbeatMs?: number;
   minResignMs?: number;
+  /** Tope de espera de cada `publish` (ms). Default:
+   *  `NGP_PRESENCE_DEFAULT_PUBLISH_TIMEOUT_MS`. Un timeout cuenta como fallo
+   *  (cooldown `minResignMs`), pero NO cuelga el heartbeat. */
+  publishTimeoutMs?: number;
+  /**
+   * Observabilidad de los fallos best-effort (el manager NUNCA lanza): firma de
+   * presencia, publish (incluye timeout) o firma del clear. Cableá un
+   * `console.warn` para que un firmante NIP-46 muerto no apague las
+   * renovaciones en silencio. Default: noop.
+   */
+  onError?: (stage: 'sign' | 'publish' | 'sign-clear', err: unknown) => void;
   /**
    * Throttle persistido entre recargas (pasá `localStorage`): si el último
    * evento publicado sigue fresco, `start()` no re-firma — sin esto, cada
@@ -123,6 +145,9 @@ export function createPresenceManager(
   const ttlSec = options.ttlSec ?? NGP_PRESENCE_DEFAULT_TTL_SEC;
   const heartbeatMs = options.heartbeatMs ?? NGP_PRESENCE_DEFAULT_HEARTBEAT_MS;
   const minResignMs = options.minResignMs ?? NGP_PRESENCE_DEFAULT_MIN_RESIGN_MS;
+  const publishTimeoutMs =
+    options.publishTimeoutMs ?? NGP_PRESENCE_DEFAULT_PUBLISH_TIMEOUT_MS;
+  const onError = options.onError ?? (() => {});
   const storageKey = options.storageKey ?? 'ngp.presence.v1';
   const publishSync =
     options.publishSync ??
@@ -183,6 +208,30 @@ export function createPresenceManager(
     }
   }
 
+  /** Centinela para distinguir "los relays no contestaron a tiempo" (ambiguo:
+   *  alguno pudo aceptar sin mandar OK) de un rechazo real (definitivo). */
+  const PUBLISH_TIMEOUT = new Error('ngp-presence: publish timeout');
+
+  /** `publish` con tope de espera. No cambia la semántica del `publish` del
+   *  juego (el pool sigue decidiendo "al menos un relay aceptó"): solo acota
+   *  cuánto la esperamos para que `inFlight` no quede clavado. La promesa
+   *  perdedora queda con handler adjunto — sin unhandled rejection. */
+  function publishWithTimeout(evt: Event): Promise<unknown> {
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject(PUBLISH_TIMEOUT), publishTimeoutMs);
+      publish(evt).then(
+        (v) => {
+          clearTimeout(t);
+          resolve(v);
+        },
+        (e) => {
+          clearTimeout(t);
+          reject(e);
+        },
+      );
+    });
+  }
+
   /** Un latido: decide si toca firmar y publica. Best-effort: nunca lanza. */
   async function beat(): Promise<void> {
     if (inFlight || !currentMessage) return;
@@ -196,26 +245,53 @@ export function createPresenceManager(
     if (lastFailAt && now - lastFailAt < minResignMs) return;
     inFlight = true;
     try {
-      const evt = await signer.signEvent(
-        buildPresenceTemplate({ gameCoord, message: currentMessage, ttlSec }),
-      );
-      await publish(evt);
-      lastMessage = currentMessage;
-      lastPublishAt = Date.now();
-      lastFailAt = 0;
-      savePersisted();
-      // Pre-firmamos el clear correspondiente a ESTA presencia (`created_at`+1
-      // para que gane el slot replaceable). Best-effort: si el firmante falla
-      // queda el clear previo; peor caso, el TTL la baja solo.
+      let evt: Event;
       try {
-        preparedClear = await signer.signEvent(
-          buildPresenceClearTemplate({ createdAt: evt.created_at + 1, gameCoord }),
+        evt = await signer.signEvent(
+          buildPresenceTemplate({ gameCoord, message: currentMessage, ttlSec }),
         );
-      } catch {
-        // sin clear pre-firmado: el cierre cae al TTL
+      } catch (e) {
+        lastFailAt = Date.now();
+        onError('sign', e);
+        return;
       }
-    } catch {
-      lastFailAt = Date.now();
+
+      let publishedOk = false;
+      let timedOut = false;
+      try {
+        await publishWithTimeout(evt);
+        publishedOk = true;
+        lastMessage = currentMessage;
+        lastPublishAt = Date.now();
+        lastFailAt = 0;
+        savePersisted();
+      } catch (e) {
+        lastFailAt = Date.now();
+        timedOut = e === PUBLISH_TIMEOUT;
+        onError('publish', e);
+      }
+
+      // Pre-firmamos el clear correspondiente a ESTA presencia (`created_at`+1
+      // para que gane el slot replaceable) TAMBIÉN tras un timeout: es ambiguo
+      // (un relay pudo aceptarla sin mandar OK) y sin clear listo `clearNow()`
+      // sale con las manos vacías. Un rechazo rápido (ningún relay aceptó) no
+      // deja presencia que apagar → no gastamos un prompt extra. La expiración
+      // cubre TODA la vida de la presencia: un clear despachado tarde (heartbeat
+      // colgado) no puede llegar ya vencido mientras ella siga viva.
+      if (publishedOk || timedOut) {
+        try {
+          preparedClear = await signer.signEvent(
+            buildPresenceClearTemplate({
+              createdAt: evt.created_at + 1,
+              gameCoord,
+              expiration: evt.created_at + ttlSec + NGP_PRESENCE_CLEAR_TTL_SEC,
+            }),
+          );
+        } catch (e) {
+          // sin clear pre-firmado: el cierre cae al TTL
+          onError('sign-clear', e);
+        }
+      }
     } finally {
       inFlight = false;
     }
@@ -263,19 +339,18 @@ export function createPresenceManager(
       const clear = preparedClear;
       preparedClear = null;
       reset();
+      // Despacho SINCRÓNICO del pre-firmado ANTES de cualquier await: si el
+      // caller no espera esta promesa (logout seguido de `location.reload()`),
+      // esto es lo único que llega a salir. 30315 es reemplazable: si después
+      // también sale el clear fresco, gana el más nuevo — dos clears es inocuo.
+      if (clear) publishSync(clear);
       try {
         // Con tiempo (logout) preferimos un clear FRESCO — pisa seguro aunque el
-        // pre-firmado haya quedado viejo; el pre-firmado es el fallback si el
-        // firmante ya no responde.
-        let evt: Event | null = null;
-        try {
-          evt = await signer.signEvent(buildPresenceClearTemplate({ gameCoord }));
-        } catch {
-          evt = clear;
-        }
-        if (evt) await publish(evt);
+        // pre-firmado haya quedado viejo; el pre-firmado ya salió como fallback.
+        const evt = await signer.signEvent(buildPresenceClearTemplate({ gameCoord }));
+        await publishWithTimeout(evt);
       } catch {
-        // Best-effort: el TTL corto la baja solo.
+        // Best-effort: el pre-firmado ya salió y el TTL corto la baja solo.
       }
     },
 
