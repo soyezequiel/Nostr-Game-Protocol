@@ -317,10 +317,15 @@ export async function buildPresenceEvent(
 
 /**
  * Firma el evento que LIMPIA la presencia (NIP-38: content vacío + expiración
- * inmediata), para que "Jugando X" desaparezca ya al cerrar sesión.
+ * inmediata), para que "Jugando X" desaparezca ya al cerrar sesión. Pasá
+ * `gameCoord` siempre que lo tengas: ancla el clear al juego que limpia, para
+ * que un observador que filtre por `#a` lo vea al instante (ver el template).
  */
-export async function buildPresenceClearEvent(signer: NgpSigner): Promise<Event> {
-  return signer.signEvent(buildPresenceClearTemplate());
+export async function buildPresenceClearEvent(
+  signer: NgpSigner,
+  p: { gameCoord?: string } = {},
+): Promise<Event> {
+  return signer.signEvent(buildPresenceClearTemplate(p));
 }
 
 // ── Marcador NGP (kind:31339) — firma sobre el template del core ─────────────

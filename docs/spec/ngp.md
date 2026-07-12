@@ -177,7 +177,11 @@ El firmador del jugador publica su estado; no requiere servidor.
 
 - El `content` es la copy visible; la decide el juego, no el protocolo.
 - **Limpiar la presencia** al salir: mismo evento con `content` vacío y
-  `expiration` inmediata (`created_at + 1`).
+  `expiration` inmediata (`created_at + 1`). El clear DEBERÍA conservar el tag
+  `a` del juego que limpia: como el kind es reemplazable, el clear pisa a la
+  presencia activa en el relay, y un observador que filtre por `#a` (el patrón
+  natural de una tienda) no lo ve si no ancla — solo "deja de ver" al jugador
+  y lo retiene hasta que vence el NIP-40.
 - Un lector DEBE considerar activa una presencia solo si tiene contenido y su
   `expiration` no pasó.
 

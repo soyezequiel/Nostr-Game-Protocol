@@ -111,6 +111,16 @@ describe("presencia NIP-38 (kind:30315)", () => {
     expect(t.tags).toContainEqual(["expiration", "1001"]);
   });
 
+  it("clear con gameCoord: ancla `a` al juego que limpia (visible vía #a) y sigue inactiva", () => {
+    const t = buildPresenceClearTemplate({ createdAt: 1000, gameCoord: COORD });
+    expect(t.tags).toContainEqual(["a", COORD]);
+    const parsed = parsePresenceEvent(asEvent(t), 1000);
+    expect(parsed?.gameCoord).toBe(COORD);
+    expect(parsed?.active).toBe(false);
+    // Sin coord no agrega el tag (compat con firmantes que no la conocen).
+    expect(buildPresenceClearTemplate({ createdAt: 1000 }).tags.some((x) => x[0] === "a")).toBe(false);
+  });
+
   it("parse: activa mientras no venza, inactiva vencida o limpiada", () => {
     const fresh = asEvent(buildPresenceTemplate({ gameCoord: COORD, message: "Jugando", ttlSec: 60, createdAt: 1000 }));
     expect(parsePresenceEvent(fresh, 1030)).toEqual({ gameCoord: COORD, active: true, expiresAt: 1060 });

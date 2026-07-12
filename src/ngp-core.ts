@@ -187,16 +187,26 @@ export function buildPresenceTemplate(p: {
 /**
  * Template que LIMPIA la presencia (NIP-38: content vacío + expiración
  * inmediata), para que "Jugando X" desaparezca ya al cerrar el juego.
+ *
+ * Pasá `gameCoord` (la coordenada del juego que se está limpiando) siempre que
+ * la tengas: sin el tag `a`, un observador que filtre presencia por `#a` (el
+ * patrón natural de una tienda) NUNCA ve el clear — y como 30315 es
+ * reemplazable, el clear PISA a la presencia activa en el relay, así que ese
+ * observador solo "deja de ver" al jugador y lo retiene hasta que vence el
+ * NIP-40 (minutos de "jugando ahora" fantasma). Es opcional solo por
+ * compatibilidad con firmantes que no conocen la coord al momento del clear.
  */
-export function buildPresenceClearTemplate(p: { createdAt?: number } = {}): NgpTimestampedTemplate {
+export function buildPresenceClearTemplate(
+  p: { createdAt?: number; gameCoord?: string } = {},
+): NgpTimestampedTemplate {
   const createdAt = p.createdAt ?? now();
+  const tags = [["d", NGP_PRESENCE_D_TAG]];
+  if (p.gameCoord) tags.push(["a", p.gameCoord]);
+  tags.push(["expiration", String(createdAt + 1)]);
   return {
     kind: NGP_KIND.presence,
     created_at: createdAt,
-    tags: [
-      ["d", NGP_PRESENCE_D_TAG],
-      ["expiration", String(createdAt + 1)],
-    ],
+    tags,
     content: "",
   };
 }
