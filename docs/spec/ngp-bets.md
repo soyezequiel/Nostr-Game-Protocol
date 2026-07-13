@@ -4,7 +4,9 @@
 > validados en producción con sats reales. Extiende [ngp.md](ngp.md).
 >
 > Implementación de referencia del wire: [`src/ngp-core.ts`](../../src/ngp-core.ts)
-> (`buildNgpBetStateTemplate`, `buildBetResultTemplate`, `parseBetContractEvent`).
+> provee el template del resultado (`buildBetResultTemplate`, kind:1341). Los
+> helpers de estado del escrow (31340) y de parseo del contrato (1339) se
+> removieron del SDK; el escrow que los implemente arma esos eventos por su cuenta.
 > Implementación de referencia del escrow: Luna Negra.
 
 ## 0. La restricción honesta: custodio sí, pero transparente
