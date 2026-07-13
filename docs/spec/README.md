@@ -34,7 +34,7 @@ hacer público.
 | 13 / 1059 | Seal / gift-wrap del reto 1v1 | remitente / efímera | NIP-59 | NIP-17/59 | estándar |
 | 14 | Rumor del reto 1v1 (sin firmar) | — | NIP-59 | NIP-17 | estándar |
 | 1111 | Comentario de participación en apuesta | participante | comentario | NIP-22 | estándar |
-| 1339 | **Contrato de apuesta** | retador | regular (inmutable) | [ngp-bets](ngp-bets.md) | **estable (v1, congelado)** |
+| 1339 | *(deprecado)* Contrato de apuesta — retirado del SDK de referencia | retador | regular (inmutable) | [ngp-bets](ngp-bets.md) | **deprecado** (escrow por eventos reemplazado por NGE) |
 | 1341 | **Resultado / anulación de apuesta** | oráculo | regular (inmutable) | [ngp-bets](ngp-bets.md) | **estable (v1, congelado)** |
 | 9734 / 9735 | Zap request / recibo (depósitos, premios) | participante / escrow | NIP-57 | NIP-57 | estándar |
 | 10050 | Relays de DM del destinatario | jugador | reemplazable | NIP-17 | estándar |
@@ -46,10 +46,14 @@ hacer público.
 | 31339 | **Mejor puntaje del jugador** | jugador | addressable | [ngp](ngp.md) | **estable (congelado)** |
 | 31337 | *(legacy)* puntaje — solo lectura durante la transición | jugador | addressable | [ngp](ngp.md) | **deprecado** (colisión con "Audio Track") |
 | 31338 | **Atestación de oráculo** | oráculo | addressable | [ngp](ngp.md) | **estable (congelado)** |
-| 31340 | **Estado del escrow / terms** | escrow | addressable | [ngp-bets](ngp-bets.md) | **estable (v1, congelado)** |
+| 31340 | *(deprecado)* Estado del escrow / terms — retirado del SDK | escrow | addressable | [ngp-bets](ngp-bets.md) | **deprecado** (escrow por eventos reemplazado por NGE) |
 
-> **Nota sobre los números.** Los kinds propios (1339, 1341, 31339, 31338,
-> 31340, 24940–24942) están congelados porque hay eventos en producción.
+> **Nota sobre los números.** Los kinds propios vigentes (1341, 31339, 31338,
+> 24940–24942) están congelados porque hay eventos en producción.
+> **1339 (contrato) y 31340 (estado del escrow) quedaron deprecados (2026-07):**
+> el escrow transparente por eventos se reemplazó por [NGE](nge.md) (coordinación
+> privada) + el resultado público 1341; sus helpers se removieron del SDK de
+> referencia. Los kinds siguen reservados (no reusar esos números).
 > **El score se renumeró 31337 → 31339 (2026-07)** tras confirmar que 31337 es
 > "Audio Track" de facto (Zapstr/Stemstr/Wavlake, registrado en
 > `registry-of-kinds`). Durante la transición los builders escriben **solo
@@ -93,3 +97,4 @@ Los cambios de wire son eventos raros y deliberados. Cada uno queda registrado a
 - **2026-07** — kind:31338 (atestación de oráculo) pasa a estable.
 - **2026-07** — NGE v1.1 (aditiva): `create_bet` devuelve detalle completo, notification 24942, `RATE_LIMITED`/`limits`, ventana de disputa.
 - **2026-07** — kinds 1339/1341/31340 congelados (v1 estable) tras validación en producción.
+- **2026-07** — **1339 (contrato) y 31340 (estado del escrow) deprecados**: el escrow transparente por eventos se reemplazó por [NGE](nge.md) (coordinación privada) + el resultado público 1341; sus helpers se removieron del SDK de referencia. Kinds reservados (no reusar). 1341 sigue vigente.

@@ -1,7 +1,11 @@
 # NGP — Apuestas: escrow transparente por eventos
 
-> **Estado: estable (v1).** Los kinds 1339 / 1341 / 31340 están **congelados** y
-> validados en producción con sats reales. Extiende [ngp.md](ngp.md).
+> **⚠️ Deprecado (2026-07).** El escrow transparente por eventos de este
+> documento —contrato **1339** + estado del escrow **31340**— fue reemplazado por
+> [NGE](nge.md) (coordinación privada) + el resultado público **1341**, que sigue
+> vigente. Sus helpers se removieron del SDK de referencia; los kinds 1339/31340
+> quedan reservados (no reusar). El documento se conserva como registro histórico
+> del wire. Extiende [ngp.md](ngp.md).
 >
 > Implementación de referencia del wire: [`src/ngp-core.ts`](../../src/ngp-core.ts)
 > provee el template del resultado (`buildBetResultTemplate`, kind:1341). Los
