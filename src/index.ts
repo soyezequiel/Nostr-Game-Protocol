@@ -7,3 +7,4 @@
 //   nostr-game-protocol/ngp-core  → solo el wire NGP (lado tienda)
 export * as nge from "./nge.js";
 export * as ngp from "./ngp.js";
+export * as bal from "./bal.js";

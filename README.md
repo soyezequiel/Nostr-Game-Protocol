@@ -65,6 +65,8 @@ Dos cosas. Primero, **la definición exacta de cada mensaje** que se intercambia
 | `nostr-game-protocol/nge` | Clase `NGE` (cliente del escrow), transporte inyectable, `auditSettlement` | El juego |
 | `nostr-game-protocol/ngp-core` | Solo el wire NGP: kinds, templates sin firmar, parsers. **Cero dependencias.** | La tienda |
 | `nostr-game-protocol/nge-core` | Solo el wire NGE: kinds efímeros, URI de conexión, cifrado NIP-44 | El escrow |
+| `nostr-game-protocol/bal` | Auto login por Bunker URI: cliente, launcher, NIP-46 y `postMessage` seguro | Juego y launcher |
+| `nostr-game-protocol/bal-core` | Wire, validadores, permisos, consentimiento y transportes abstractos | Cualquier runtime |
 
 No es todo-o-nada: podés adoptar solo el marcador, o solo la presencia, o solo las apuestas. Cada bloque es independiente.
 
@@ -73,6 +75,8 @@ No es todo-o-nada: podés adoptar solo el marcador, o solo la presencia, o solo 
 **NGP (Nostr Games Protocol)** es la capa pública: presencia NIP-38 ("Jugando X"), marcador `kind:31339`, retos 1v1 por NIP-17 (cifrados de punta a punta — ni la tienda puede leerlos), y la liquidación transparente de apuestas (contrato `1339`, resultado `1341`, estado del escrow `31340`). Todo son eventos Nostr estándar: cualquier cliente Nostr los lee, no solo Luna Negra.
 
 **NGE (Nostr Game Escrow)** es la capa privada: el canal por donde tu juego coordina una apuesta con el escrow. Es un RPC cifrado (NIP-44) sobre eventos efímeros, calcado del diseño de NWC: request/response, el relay es un caño tonto, la fuente de verdad vive en el escrow. La coordinación es privada; la liquidación pública (NGP) es opcional por apuesta.
+
+**BAL (Bunker Auto Login)** es una capa de transporte y autorización sobre NIP-46: un launcher entrega al juego una Bunker URI temporal después de validar ventana/origen e identidad y obtener consentimiento. La `nsec` nunca se entrega al juego.
 
 Se complementan: NGE coordina en privado, NGP publica lo que la apuesta decida hacer público.
 
@@ -127,6 +131,7 @@ Los **test vectors** (`vectors/nge-test-vectors.json`) son eventos NGE firmados 
 - [`docs/spec/ngp.md`](docs/spec/ngp.md) — la capa pública: marcador, atestación, presencia, retos.
 - [`docs/spec/ngp-bets.md`](docs/spec/ngp-bets.md) — el escrow transparente por eventos.
 - [`docs/spec/nge.md`](docs/spec/nge.md) — el RPC cifrado de NGE.
+- [`docs/spec/bal.md`](docs/spec/bal.md) — auto login modular sobre NIP-46.
 - [`docs/nip/games.md`](docs/nip/games.md) — el draft de NIP (inglés) para proponer a `nostr-protocol/nips`.
 
 Luna Negra y los juegos son **implementaciones** de esta spec; sus docs internos

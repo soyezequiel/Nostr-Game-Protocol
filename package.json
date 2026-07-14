@@ -1,6 +1,6 @@
 {
   "name": "nostr-game-protocol",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "SDK de NGP (Nostr Games Protocol) y NGE (Nostr Game Escrow): wire canónico compartido tienda ⇄ juegos + cliente NGE y capa de firma NGP del lado juego.",
   "license": "MIT",
   "repository": {
@@ -37,6 +37,30 @@
     "./ngp-core": {
       "types": "./dist/ngp-core.d.ts",
       "default": "./dist/ngp-core.js"
+    },
+    "./bal": {
+      "types": "./dist/bal.d.ts",
+      "default": "./dist/bal.js"
+    },
+    "./bal-core": {
+      "types": "./dist/bal-core.d.ts",
+      "default": "./dist/bal-core.js"
+    },
+    "./bal-client": {
+      "types": "./dist/bal-client.d.ts",
+      "default": "./dist/bal-client.js"
+    },
+    "./bal-launcher": {
+      "types": "./dist/bal-launcher.d.ts",
+      "default": "./dist/bal-launcher.js"
+    },
+    "./bal-nip46": {
+      "types": "./dist/bal-nip46.d.ts",
+      "default": "./dist/bal-nip46.js"
+    },
+    "./bal-web": {
+      "types": "./dist/bal-web.d.ts",
+      "default": "./dist/bal-web.js"
     },
     "./vectors/nge-test-vectors.json": "./vectors/nge-test-vectors.json"
   },
