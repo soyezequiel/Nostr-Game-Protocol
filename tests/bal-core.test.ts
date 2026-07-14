@@ -56,12 +56,13 @@ describe("BAL remembered consent", () => {
     permissions: ["get_public_key", "sign_event:22242"],
   };
 
-  it("queda ligado a juego, origen, usuario y permisos", () => {
+  it("queda ligado a juego, origen, usuario, firmante y permisos", () => {
     const auth = createBalAuthorization(consent, 1_000, 5_000);
     expect(auth.id).toBe(balAuthorizationId(consent));
     expect(matchesBalAuthorization(auth, consent, 2_000)).toBe(true);
     expect(matchesBalAuthorization(auth, { ...consent, origin: "https://evil.example" }, 2_000)).toBe(false);
     expect(matchesBalAuthorization(auth, { ...consent, pubkey: "34".repeat(32) }, 2_000)).toBe(false);
+    expect(matchesBalAuthorization(auth, { ...consent, identitySource: "nip07" }, 2_000)).toBe(false);
     expect(matchesBalAuthorization(auth, { ...consent, permissions: [...consent.permissions, "sign_event:1"] }, 2_000)).toBe(false);
     expect(matchesBalAuthorization(auth, consent, 6_000)).toBe(false);
   });

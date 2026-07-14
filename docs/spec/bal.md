@@ -28,6 +28,10 @@ Todos llevan `protocol`, `version: 1`, `type`, `requestId` y `nonce`.
 Los permisos válidos son `get_public_key`, `sign_event`, `sign_event:<kind>`,
 `nip04_encrypt`, `nip04_decrypt`, `nip44_encrypt` y `nip44_decrypt`.
 
+El launcher declara el origen de su firmante como `email`, `nsec` o `nip07`.
+Con `nip07`, cada operación sigue delegándose al complemento del navegador: BAL
+no obtiene ni simula una clave privada local.
+
 ## Garantías de la implementación de referencia
 
 - `WebPostMessageTransport` rechaza `targetOrigin="*"` y orígenes opacos.
@@ -36,8 +40,9 @@ Los permisos válidos son `get_public_key`, `sign_event`, `sign_event:<kind>`,
 - El secret sólo permite el primer `connect`; luego queda consumido.
 - El remote signer verifica firma, autor, destinatario, frescura, duplicados,
   expiración y permisos antes de delegar al signer del launcher.
-- Una autorización recordada queda ligada a juego, origen, identidad, pubkey y
-  conjunto exacto de permisos. Cualquier cambio exige consentimiento nuevo.
+- Una autorización recordada queda ligada a juego, origen, identidad, pubkey,
+  tipo de firmante y conjunto exacto de permisos. Cualquier cambio exige
+  consentimiento nuevo.
 - El núcleo no importa DOM. `BalTransport` y los puertos reservados permiten
   agregar variables de entorno, IPC, eventos Nostr, deep links o consolas.
 

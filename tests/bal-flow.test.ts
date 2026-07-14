@@ -89,7 +89,7 @@ describe("BAL game ↔ launcher flow", () => {
       getIdentity: () => ({
         identityId: "user-1",
         pubkey: identityPubkey,
-        source: "nsec" as const,
+        source: "nip07" as const,
         signer: {
           getPublicKey: async () => identityPubkey,
           signEvent: async (event) => finalizeEvent(event, identitySecret),

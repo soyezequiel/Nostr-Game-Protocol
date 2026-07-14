@@ -206,7 +206,7 @@ export interface BalNostrEventTransport<Peer = unknown> extends BalTransport<Pee
 export interface BalDeepLinkTransport<Peer = unknown> extends BalTransport<Peer> {}
 export interface BalConsoleTransport<Peer = unknown> extends BalTransport<Peer> {}
 
-export type BalIdentitySource = "email" | "nsec";
+export type BalIdentitySource = "email" | "nsec" | "nip07";
 
 export type BalConsentRequest = {
   gameId: string;
@@ -238,6 +238,7 @@ export function balAuthorizationId(input: BalConsentRequest): string {
     input.origin,
     input.identityId,
     input.pubkey,
+    input.identitySource,
     ...normalizeBalPermissions(input.permissions),
   ];
   return parts.map((part) => encodeURIComponent(part)).join("|");

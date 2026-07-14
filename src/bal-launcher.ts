@@ -108,7 +108,11 @@ export class BalLauncher<Peer> {
       return this.sendError(envelope, ready, "NO_ACTIVE_IDENTITY", "No se pudo obtener la identidad activa");
     }
     if (!identity) return this.sendError(envelope, ready, "NO_ACTIVE_IDENTITY", "Luna Negra no tiene una identidad BAL activa");
-    if (identity.source !== "email" && identity.source !== "nsec") {
+    if (
+      identity.source !== "email"
+      && identity.source !== "nsec"
+      && identity.source !== "nip07"
+    ) {
       return this.sendError(envelope, ready, "IDENTITY_NOT_ELIGIBLE", "La identidad activa no admite BAL");
     }
     const consent: BalConsentRequest = {
