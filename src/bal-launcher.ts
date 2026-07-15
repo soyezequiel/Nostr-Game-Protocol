@@ -18,6 +18,7 @@ import {
 import {
   BalNip46RemoteSession,
   type BalNip46RelayFactory,
+  type BalNip46SessionCloseReason,
   type BalNip46Signer,
 } from "./bal-nip46.js";
 
@@ -45,6 +46,13 @@ export type BalLauncherSession = {
   close(): void;
 };
 
+export type BalLauncherClosedSession = {
+  requestId: string;
+  gameId: string;
+  gameName: string;
+  origin: string;
+};
+
 export type BalLauncherOptions<Peer> = {
   transport: BalTransport<Peer>;
   registry: BalGameRegistry<Peer>;
@@ -56,6 +64,11 @@ export type BalLauncherOptions<Peer> = {
   authorizationTtlMs?: number;
   sessionTtlMs?: number;
   now?: () => number;
+  /** Informa cierres detectados por NIP-46 cuando ya no existe la ventana original. */
+  onSessionClosed?: (
+    session: BalLauncherClosedSession,
+    reason: BalNip46SessionCloseReason,
+  ) => void;
 };
 
 type ActiveSession<Peer> = Omit<BalLauncherSession, "bunkerUri"> & {
@@ -142,6 +155,17 @@ export class BalLauncher<Peer> {
         relays: this.options.relays,
         relayFactory: this.options.relayFactory,
         expiresAt,
+        onClosed: (reason) => {
+          const current = this.active.get(ready.requestId);
+          if (!current) return;
+          this.active.delete(ready.requestId);
+          this.options.onSessionClosed?.({
+            requestId: ready.requestId,
+            gameId: game.gameId,
+            gameName: game.gameName,
+            origin: game.origin,
+          }, reason);
+        },
       });
       const bunkerUri = remote.takeBunkerUri();
       const authorization = remembered ?? createBalAuthorization(consent, now, this.options.authorizationTtlMs);

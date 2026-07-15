@@ -115,7 +115,10 @@ export type BalNip46RemoteSessionOptions = {
   expiresAt?: number;
   relayFactory?: BalNip46RelayFactory;
   onRedeemed?: () => void;
+  onClosed?: (reason: BalNip46SessionCloseReason) => void;
 };
+
+export type BalNip46SessionCloseReason = "client_logout" | "expired" | "launcher";
 
 /**
  * Remote signer efímero. Su clave sólo identifica esta sesión NIP-46; todas las
@@ -168,7 +171,7 @@ export class BalNip46RemoteSession {
       { kinds: [NIP46_KIND], authors: [this.clientPubkey], "#p": [this.servicePubkey], since },
       (event) => { void this.handleEvent(event); },
     );
-    this.expiryTimer = setTimeout(() => this.close(), Math.max(0, this.expiresAt - Date.now()));
+    this.expiryTimer = setTimeout(() => this.close("expired"), Math.max(0, this.expiresAt - Date.now()));
   }
 
   /** Entrega la URI exactamente una vez y elimina la copia retenida por el servicio. */
@@ -180,7 +183,8 @@ export class BalNip46RemoteSession {
   }
 
   private async handleEvent(event: Event): Promise<void> {
-    if (this.closed || Date.now() >= this.expiresAt) return this.close();
+    if (this.closed) return;
+    if (Date.now() >= this.expiresAt) return this.close("expired");
     if (event.pubkey !== this.clientPubkey || !verifyEvent(event) || this.seenEvents.has(event.id)) return;
     if (Math.abs(event.created_at * 1000 - Date.now()) > 5 * 60_000) return;
     this.seenEvents.add(event.id);
@@ -196,6 +200,10 @@ export class BalNip46RemoteSession {
     try {
       const result = await this.execute(request);
       await this.respond({ id: request.id, result });
+      // NIP-46 exige confirmar `logout` antes de retirar la sesión. El callback
+      // permite que el launcher elimine también su registro BAL aunque ya no
+      // exista una pestaña capaz de enviar BAL_LOGOUT por postMessage.
+      if (request.method === "logout") this.close("client_logout");
     } catch (error) {
       const message = error instanceof BalError ? error.message : "Operación NIP-46 rechazada";
       await this.respond({ id: request.id, error: message.slice(0, 180) }).catch(() => {});
@@ -220,6 +228,7 @@ export class BalNip46RemoteSession {
       return "ack";
     }
     if (!this.redeemed) throw new BalError("NIP46_ERROR", "La sesión NIP-46 no fue conectada");
+    if (request.method === "logout") return "ack";
     if (request.method === "ping") return "pong";
     if (request.method === "get_public_key") {
       this.requirePermission("get_public_key");
@@ -271,7 +280,7 @@ export class BalNip46RemoteSession {
     await this.transport.publish(event);
   }
 
-  close(): void {
+  close(reason: BalNip46SessionCloseReason = "launcher"): void {
     if (this.closed) return;
     this.closed = true;
     this.unsubscribe?.();
@@ -279,6 +288,7 @@ export class BalNip46RemoteSession {
     if (this.expiryTimer) clearTimeout(this.expiryTimer);
     this.expiryTimer = null;
     this.transport.close();
+    this.options.onClosed?.(reason);
   }
 }
 
@@ -384,6 +394,12 @@ export class BalNip46Client implements BalNip46Signer {
   nip44Decrypt(peer: string, ciphertext: string): Promise<string> { return this.rpc("nip44_decrypt", [peer, ciphertext]); }
 
   async close(): Promise<void> {
+    // `logout` es el cierre cortés estándar de NIP-46. Es especialmente
+    // importante para SharedWorker: al desaparecer la última pestaña ya no hay
+    // una Window que pueda enviar BAL_LOGOUT, pero el relay sigue disponible.
+    if (this.pointer && this.transport) {
+      try { await this.rpc("logout", []); } catch { /* best effort */ }
+    }
     this.unsubscribe?.();
     this.unsubscribe = null;
     this.transport?.close();

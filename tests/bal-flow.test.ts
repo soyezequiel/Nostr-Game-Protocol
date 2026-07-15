@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { finalizeEvent, generateSecretKey, getPublicKey, type Event, type Filter } from "nostr-tools";
 import { BalGameClient } from "../src/bal-client.js";
 import { MemoryBalAuthorizationStore, type BalMessage, type BalTransport, type BalTransportEnvelope } from "../src/bal-core.js";
@@ -73,6 +73,7 @@ describe("BAL game ↔ launcher flow", () => {
     const identityPubkey = getPublicKey(identitySecret);
     const authorizations = new MemoryBalAuthorizationStore();
     let consentPrompts = 0;
+    const onSessionClosed = vi.fn();
 
     const launcher = new BalLauncher({
       transport: launcherTransport,
@@ -96,6 +97,7 @@ describe("BAL game ↔ launcher flow", () => {
         },
       }),
       requestConsent: async () => { consentPrompts += 1; return "remember" as const; },
+      onSessionClosed,
     });
     launcher.start();
 
@@ -118,6 +120,19 @@ describe("BAL game ↔ launcher flow", () => {
     const secondLogin = await second.login();
     expect(secondLogin.pubkey).toBe(identityPubkey);
     expect(consentPrompts).toBe(1);
+
+    // Simula al SharedWorker cerrando su cliente cuando desaparece la última
+    // pestaña: no queda una Window desde la que mandar BAL_LOGOUT.
+    await firstLogin.signer.close();
+    await vi.waitFor(() => expect(onSessionClosed).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestId: expect.stringMatching(/^request-/),
+        gameId: "ajedrez",
+        gameName: "Ajedrez",
+        origin: gameOrigin,
+      }),
+      "client_logout",
+    ));
 
     await first.logout();
     await second.logout();

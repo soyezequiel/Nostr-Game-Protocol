@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   finalizeEvent,
   generateSecretKey,
@@ -68,6 +68,7 @@ describe("BAL NIP-46 adapter", () => {
     const identityPubkey = getPublicKey(identitySecret);
     const clientSecret = generateSecretKey();
     const client = new BalNip46Client({ clientSecret, relayFactory: bus.factory, rpcTimeoutMs: 1_000 });
+    const onClosed = vi.fn();
     const remote = await BalNip46RemoteSession.create({
       clientPubkey: client.clientPubkey,
       identityPubkey,
@@ -75,6 +76,7 @@ describe("BAL NIP-46 adapter", () => {
       permissions: ["get_public_key", "sign_event:22242"],
       relays: ["wss://relay.example"],
       relayFactory: bus.factory,
+      onClosed,
     });
 
     const bunkerUri = remote.takeBunkerUri();
@@ -92,6 +94,7 @@ describe("BAL NIP-46 adapter", () => {
     const replay = new BalNip46Client({ clientSecret, relayFactory: bus.factory, rpcTimeoutMs: 1_000 });
     await expect(replay.open(bunkerUri)).rejects.toThrow(/ya fue utilizada|Credencial BAL inválida/);
     await client.close();
+    expect(onClosed).toHaveBeenCalledWith("client_logout");
     await replay.close();
     remote.close();
   });
